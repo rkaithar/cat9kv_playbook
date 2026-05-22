@@ -1,0 +1,27 @@
+# Large VM image artifacts
+*.iso
+*.ova
+*.ovf
+*.vmdk
+
+# Generated deployment files
+tmp/
+logs/
+*.log
+import-*.json
+import-spec*.json
+
+# Local secrets and runtime state
+.env
+.venv/
+venv/
+*.password
+*.secret
+
+# Python/cache artifacts for future automation
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# macOS
+.DS_Store

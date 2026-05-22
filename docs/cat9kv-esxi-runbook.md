@@ -15,9 +15,10 @@ Key points from those notes:
 3. OVA deployment should keep the OVA-defined CPU, memory, disk, controller, CD/DVD, and NIC shape unless there is a known reason to override it.
 4. ISO-based manual ESXi deployment should use at least `8 vCPU` and `16 GB RAM`.
 5. Use thick disk provisioning for manual ISO deployment. The current working 17.18.03 OVA imports its disk as thin-provisioned, and that is acceptable for OVA-based deployment unless the lab requires thick disks.
-6. Add two network-backed serial ports before boot:
+6. Ensure two network-backed serial ports before boot:
    - First serial port: IOS console.
    - Second serial port: IOS-XE aux/Linux shell.
+   - Some OVAs include serial devices already, while some builds do not. The automation must inspect the imported VM, add missing serial devices if needed, then set the final telnet URIs.
 7. ESXi firewall must allow `VM serial port connected over network`.
 8. Do not edit/remove ESXi network adapters casually after creation; Cat9kV interface mapping can be affected.
 9. Datapath/platform selection through `vswitch.xml` ISO is optional for the basic boot path and should be a separate advanced option.
@@ -141,7 +142,9 @@ govc import.ova \
   cat9kv-universalk9_serial.17.15.04.ova
 ```
 
-4. Add two network-backed serial ports:
+4. Ensure two network-backed serial ports:
+
+Inspect the imported VM first. If the OVA already created serial ports, reuse them and update their backing URI. If fewer than two serial ports exist, add the missing serial ports before mapping the URIs.
 
 | Serial port | URI | Purpose |
 | --- | --- | --- |
@@ -282,9 +285,11 @@ show inventory
 From ESXi/vSphere:
 
 1. VM is powered on.
-2. CPU is `8`.
-3. Memory is `16 GB`.
-4. ISO is connected at boot.
+2. CPU and memory match the selected deployment method:
+   - OVA deployment keeps the OVA defaults or catalog override.
+   - Manual ISO deployment uses at least `8 vCPU` and `16 GB RAM`.
+3. ISO or OVA-provided boot media is connected as required.
+4. VM has exactly two network-backed serial ports with the expected telnet URIs.
 5. Serial ports are reachable by telnet.
 6. Network adapters are present from the OVA. Port groups are not changed by the basic automation.
 
@@ -330,6 +335,7 @@ versions:
     iso_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso"
     deployment_method: ova
     ova_keep_hardware_defaults: true
+    ensure_serial_ports: true
     serial_base: 8021
     serial_step: 10
 ```
@@ -381,7 +387,11 @@ Before deployment, the engine must scan all existing VMs for serial URIs and als
    - Do not alter OVA network mappings in the basic engine.
    - Keep `PowerOn` false during import.
 7. Import each OVA with `govc import.ova`.
-8. Add two network-backed serial ports with pyVmomi.
+8. Ensure two network-backed serial ports with pyVmomi:
+   - Reuse OVA-provided serial devices when present.
+   - Add missing serial devices when the OVA did not include them.
+   - Set Serial Port 1 to `telnet://:<serial1>` and Serial Port 2 to `telnet://:<serial2>`.
+   - Enable connect at power on.
 9. Power on each VM.
 10. Verify:
    - VM exists and is powered on.

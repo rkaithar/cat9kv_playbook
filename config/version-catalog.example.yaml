@@ -5,6 +5,7 @@ versions:
     iso_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso"
     deployment_method: ova
     ova_keep_hardware_defaults: true
+    ensure_serial_ports: true
     serial_base: 8021
     serial_step: 10
   "BLD_V261_THROTTLE_LATEST_20260520_183737":
@@ -13,5 +14,6 @@ versions:
     iso_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.BLD_V261_THROTTLE_LATEST_20260520_183737.iso"
     deployment_method: ova
     ova_keep_hardware_defaults: true
+    ensure_serial_ports: true
     serial_base: 9021
     serial_step: 10

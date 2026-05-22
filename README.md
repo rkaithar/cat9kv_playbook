@@ -8,7 +8,8 @@ The current scope is intentionally small:
 2. Use a VM naming convention that includes the IOS-XE version token and serial console ports.
 3. Discover datastore and ESXi inventory instead of assuming fixed names.
 4. Leave port-group/interface mapping to the user after VM creation.
-5. Keep credentials out of files and prompt for them at runtime.
+5. Ensure two network-backed serial ports even when an OVA does not include them.
+6. Keep credentials out of files and prompt for them at runtime.
 
 Start with [docs/cat9kv-esxi-runbook.md](docs/cat9kv-esxi-runbook.md).
 

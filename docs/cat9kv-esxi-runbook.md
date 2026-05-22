@@ -27,11 +27,12 @@ Key points from those notes:
 
 | Item | Default |
 | --- | --- |
-| Preferred OVA HTTP source | `http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.ova` |
-| ISO HTTP source | `http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.iso` |
-| Datastore ISO path | `[<selected-datastore>] ISO/cat9kv-universalk9_serial.17.18.03.iso` |
+| Preferred OVA HTTP source | `http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.ova` |
+| ISO HTTP source | `http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso` |
+| Upstream mirror source | `http://10.76.90.102/` |
+| Datastore ISO path | `[<selected-datastore>] ISO/cat9kv-universalk9_serial.17.15.04.iso` |
 | VM name pattern | `Cat9kv_<ios-version>_<serial1-port>_<serial2-port>` |
-| Example VM name | `Cat9kv_17183_8021_8022` |
+| Example VM name | `Cat9kv_171504_8021_8022` |
 | Compatibility | `ESXi 8.0 U2 virtual machine` |
 | Guest OS family | `Linux` |
 | Guest OS version | `Other 3.x Linux (64-bit)` |
@@ -44,7 +45,30 @@ Key points from those notes:
 | Serial port 1 | `telnet://:8021`, connect at power on |
 | Serial port 2 | `telnet://:8022`, connect at power on |
 
-For OVA deployment, keep the OVA-defined hardware. The known-working 17.18.03 OVA on ESXi imported with `4 vCPU`, `18 GB RAM`, a `16 GB` thin disk, 9 x `E1000` NICs, and an OVA-provided CD/DVD device image on IDE.
+For OVA deployment, keep the OVA-defined hardware. The known-working 17.18.03 OVA on ESXi imported with `4 vCPU`, `18 GB RAM`, a `16 GB` thin disk, 9 x `E1000` NICs, and an OVA-provided CD/DVD device image on IDE. At the time of this update, `17.18.03` was not visible on the `10.76.90.102` HTTP listing, so it is not in the example catalog until the file server exposes it again.
+
+## Image File Filter
+
+The shared file server for this project must contain Cat9kV VM images only. Automated sync jobs must accept only files whose basename starts with:
+
+```text
+cat9kv-
+```
+
+Default allowed extensions are:
+
+```text
+.iso
+.ova
+```
+
+Do not mirror Cat9K switch upgrade `.bin` files such as `cat9k_iosxe...bin`; those are not Cat9kV VM boot images.
+
+Mirror command:
+
+```sh
+python3 scripts/sync_cat9kv_images.py http://10.76.90.102/ --dest /srv/cat9kv/images --prune
+```
 
 ## VM Naming and Serial Port Convention
 
@@ -57,13 +81,13 @@ Cat9kv_<ios-version>_<serial1-port>_<serial2-port>
 Example:
 
 ```text
-Cat9kv_17183_8021_8022
+Cat9kv_171504_8021_8022
 ```
 
 Rules:
 
 1. `Cat9kv` identifies the VM family.
-2. `17183` identifies IOS-XE `17.18.03`.
+2. `171504` identifies IOS-XE `17.15.04`.
 3. `8021` must match Serial Port 1 in the VM config.
 4. `8022` must match Serial Port 2 in the VM config.
 5. The script must validate that both ports are unused on the target ESXi host before creating the VM.
@@ -84,7 +108,7 @@ These should be prompted at the start or accepted as CLI flags.
 | Number of Virtual Cat9k for this ESXi | Prompt. |
 | Datastore | Discover and ask user to select. |
 | ISO source/path | Default to current ISO, but verify it exists in datastore. |
-| OVA source/path | Prefer the working 17.18.03 OVA when using OVA deployment. |
+| OVA source/path | Load from the version catalog and verify the URL before deployment. |
 
 ## Working OVA Automation Method
 
@@ -95,11 +119,11 @@ Known-good flow on a standalone ESXi host:
 1. Generate an import spec:
 
 ```sh
-govc import.spec cat9kv-universalk9_serial.17.18.03.ova > import-spec.json
+govc import.spec cat9kv-universalk9_serial.17.15.04.ova > import-spec.json
 ```
 
 2. Edit the import spec:
-   - Set `Name` to `Cat9kv_17183_<serial1>_<serial2>`.
+   - Set `Name` to `Cat9kv_171504_<serial1>_<serial2>`.
    - Set `DiskProvisioning` to `thin`.
    - Set `PowerOn` to `false`.
    - Do not edit `NetworkMapping` for the basic engine.
@@ -111,10 +135,10 @@ govc import.spec cat9kv-universalk9_serial.17.18.03.ova > import-spec.json
 SELECTED_DATASTORE="<selected-datastore>"
 
 govc import.ova \
-  -options=import-Cat9kv_17183_8021_8022.json \
+  -options=import-Cat9kv_171504_8021_8022.json \
   -ds="$SELECTED_DATASTORE" \
   -pool='/ha-datacenter/host/localhost./Resources' \
-  cat9kv-universalk9_serial.17.18.03.ova
+  cat9kv-universalk9_serial.17.15.04.ova
 ```
 
 4. Add two network-backed serial ports:
@@ -169,14 +193,14 @@ If the ISO is not already in the datastore:
 ssh root@<esxi-host>
 SELECTED_DATASTORE="<selected-datastore>"
 mkdir -p "/vmfs/volumes/$SELECTED_DATASTORE/ISO"
-wget -O "/vmfs/volumes/$SELECTED_DATASTORE/ISO/cat9kv-universalk9_serial.17.18.03.iso" \
-  http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.iso
+wget -O "/vmfs/volumes/$SELECTED_DATASTORE/ISO/cat9kv-universalk9_serial.17.15.04.iso" \
+  http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso
 ```
 
 Expected datastore path:
 
 ```text
-[<selected-datastore>] ISO/cat9kv-universalk9_serial.17.18.03.iso
+[<selected-datastore>] ISO/cat9kv-universalk9_serial.17.15.04.iso
 ```
 
 ### 2. Enable ESXi Serial Console Firewall
@@ -198,7 +222,7 @@ Create a new VM with:
 | Setting | Value |
 | --- | --- |
 | Creation type | Create a new virtual machine |
-| VM name | `Cat9kv_17183_<serial1-port>_<serial2-port>` |
+| VM name | `Cat9kv_171504_<serial1-port>_<serial2-port>` |
 | Compatibility | `ESXi 8.0 U2 virtual machine` |
 | Guest OS family | `Linux` |
 | Guest OS version | `Other 3.x Linux (64-bit)` |
@@ -226,9 +250,9 @@ Example allocation:
 
 | VM | Serial Port 1 | Serial Port 2 |
 | --- | --- | --- |
-| `Cat9kv_17183_8021_8022` | `8021` | `8022` |
-| `Cat9kv_17183_8031_8032` | `8031` | `8032` |
-| `Cat9kv_17183_8041_8042` | `8041` | `8042` |
+| `Cat9kv_171504_8021_8022` | `8021` | `8022` |
+| `Cat9kv_171504_8031_8032` | `8031` | `8032` |
+| `Cat9kv_171504_8041_8042` | `8041` | `8042` |
 
 ### 5. Power On and Connect
 
@@ -279,7 +303,7 @@ The user should only need to provide:
 | ESXi IP/FQDN | `<esxi-management-ip>` |
 | ESXi username | `root` |
 | ESXi password | Prompted with `getpass`; never saved |
-| Cat9kV version | `17.18.03` |
+| Cat9kV version | `17.15.04` |
 | Number of Virtual Cat9k for this ESXi | `4` |
 
 The engine should discover or auto-select:
@@ -288,7 +312,7 @@ The engine should discover or auto-select:
 | --- | --- |
 | Datastore | Always discover datastores from ESXi first. If exactly one suitable datastore has enough free space, use it after showing the choice. If multiple suitable datastores exist, ask the user to select. Do not assume `datastore1` exists. |
 | Port group | Do not ask and do not modify. Keep the OVA/default import network behavior. Print a post-deploy message telling the user to change ESXi port groups manually as required. |
-| VM names | Generate from version and serial ports, for example `Cat9kv_17183_8021_8022` |
+| VM names | Generate from version and serial ports, for example `Cat9kv_171504_8021_8022` |
 | Serial ports | Find unused pairs and embed them in the VM name |
 | OVA/ISO URLs | Load from the local version catalog |
 | OVA network mappings | Do not change in the basic engine. Keep OVA/default network mapping behavior. |
@@ -300,10 +324,10 @@ Keep Cat9kV image information in a small local catalog so the user only selects 
 
 ```yaml
 versions:
-  "17.18.03":
-    token: "17183"
-    ova_url: "http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.ova"
-    iso_url: "http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.iso"
+  "17.15.04":
+    token: "171504"
+    ova_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.ova"
+    iso_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso"
     deployment_method: ova
     ova_keep_hardware_defaults: true
     serial_base: 8021
@@ -319,14 +343,14 @@ serial1 = base + index * step
 serial2 = serial1 + 1
 ```
 
-For version `17.18.03` with base `8021` and step `10`:
+For version `17.15.04` with base `8021` and step `10`:
 
 | Index | VM name | Serial 1 | Serial 2 |
 | --- | --- | --- | --- |
-| 0 | `Cat9kv_17183_8021_8022` | `8021` | `8022` |
-| 1 | `Cat9kv_17183_8031_8032` | `8031` | `8032` |
-| 2 | `Cat9kv_17183_8041_8042` | `8041` | `8042` |
-| 3 | `Cat9kv_17183_8051_8052` | `8051` | `8052` |
+| 0 | `Cat9kv_171504_8021_8022` | `8021` | `8022` |
+| 1 | `Cat9kv_171504_8031_8032` | `8031` | `8032` |
+| 2 | `Cat9kv_171504_8041_8042` | `8041` | `8042` |
+| 3 | `Cat9kv_171504_8051_8052` | `8051` | `8052` |
 
 Before deployment, the engine must scan all existing VMs for serial URIs and also attempt a TCP connect to the candidate ports. If either check shows a conflict, skip to the next pair.
 
@@ -352,7 +376,7 @@ Before deployment, the engine must scan all existing VMs for serial URIs and als
    - `remoteSerialPort` firewall rule is enabled.
 6. Generate one `govc import.spec` file per VM:
    - Set the VM name.
-   - Set `DiskProvisioning` to `thin` for the 17.18.03 OVA.
+   - Set `DiskProvisioning` to `thin` for the OVA unless the catalog overrides it.
    - Keep Day-0 `PropertyMapping` blank.
    - Do not alter OVA network mappings in the basic engine.
    - Keep `PowerOn` false during import.
@@ -388,10 +412,10 @@ target:
   mode: standalone_esxi
   host: <esxi-host>
 vm:
-  name: Cat9kv_17183_8021_8022
+  name: Cat9kv_171504_8021_8022
   family: Cat9kv
-  ios_version: 17.18.03
-  ios_version_token: "17183"
+  ios_version: 17.15.04
+  ios_version_token: "171504"
   deployment_method: ova_preferred
   compatibility: esxi8_0_u2
   guest_os_family: linux
@@ -404,9 +428,9 @@ resources:
   iso_manual_disk_format: thick_lazy_zeroed
 storage:
   datastore: <selected-datastore>
-  ova_http_url: http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.ova
-  iso_http_url: http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.iso
-  iso_datastore_path: "[<selected-datastore>] ISO/cat9kv-universalk9_serial.17.18.03.iso"
+  ova_http_url: http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.ova
+  iso_http_url: http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso
+  iso_datastore_path: "[<selected-datastore>] ISO/cat9kv-universalk9_serial.17.15.04.iso"
 network:
   modify_portgroups: false
   post_deploy_message: "Port groups were not changed by this automation. Update VM network adapter port groups manually in ESXi if your topology requires it."

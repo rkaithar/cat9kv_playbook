@@ -1,9 +1,17 @@
 versions:
-  "17.18.03":
-    token: "17183"
-    ova_url: "http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.ova"
-    iso_url: "http://10.76.90.102/cat9kv-universalk9_serial.17.18.03.iso"
+  "17.15.04":
+    token: "171504"
+    ova_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.ova"
+    iso_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso"
     deployment_method: ova
     ova_keep_hardware_defaults: true
     serial_base: 8021
+    serial_step: 10
+  "BLD_V261_THROTTLE_LATEST_20260520_183737":
+    token: "V26120260520"
+    ova_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.BLD_V261_THROTTLE_LATEST_20260520_183737.ova"
+    iso_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.BLD_V261_THROTTLE_LATEST_20260520_183737.iso"
+    deployment_method: ova
+    ova_keep_hardware_defaults: true
+    serial_base: 9021
     serial_step: 10

@@ -13,3 +13,11 @@ The current scope is intentionally small:
 Start with [docs/cat9kv-esxi-runbook.md](docs/cat9kv-esxi-runbook.md).
 
 The version catalog example is in [config/version-catalog.example.yaml](config/version-catalog.example.yaml). Copy it to a local runtime config when the automation engine is added.
+
+To mirror images from the HTTP source at `10.76.90.102`, use [scripts/sync_cat9kv_images.py](scripts/sync_cat9kv_images.py):
+
+```sh
+python3 scripts/sync_cat9kv_images.py http://10.76.90.102/ --dest /srv/cat9kv/images --prune
+```
+
+The script only accepts files whose basename starts with `cat9kv-`, so Cat9K `.bin` images are not pulled into the Cat9kV image repository.

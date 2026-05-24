@@ -418,6 +418,39 @@ Before deployment, the engine must scan all existing VMs for serial URIs and als
 11. Print a deployment summary with VM names and telnet commands.
 12. Print: `Port groups were not changed by this automation. Update VM network adapter port groups manually in ESXi if your topology requires it.`
 
+### End-of-Run Console Access Summary
+
+At the end of every dry run and deployment run, print a copy/paste-ready console access block. Serial Port 1 is the IOS console. Serial Port 2 is the aux/Linux shell path.
+
+Example:
+
+```text
+Cat9kV deployment summary
+ESXi host: 10.76.90.41
+Version: 17.18.03
+Datastore: datastore1
+
+VM: Cat9kv_17183_8061_8062
+  Power state: poweredOn
+  IOS console:
+    telnet 10.76.90.41 8061
+  Aux/Linux shell:
+    telnet 10.76.90.41 8062
+
+VM: Cat9kv_17183_8071_8072
+  Power state: poweredOn
+  IOS console:
+    telnet 10.76.90.41 8071
+  Aux/Linux shell:
+    telnet 10.76.90.41 8072
+
+Post-deploy action:
+  Port groups were not changed by this automation.
+  Update VM network adapter port groups manually in ESXi if your topology requires it.
+```
+
+For dry runs, use the same block but mark each VM as `planned` instead of `poweredOn`.
+
 ### Out of Scope for Basic Engine
 
 Do not include these in the basic engine:

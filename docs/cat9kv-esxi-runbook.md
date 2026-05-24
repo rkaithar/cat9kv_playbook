@@ -447,7 +447,9 @@ Before deployment, the engine must scan all existing VMs for serial URIs and als
 
 At the end of every dry run and deployment run, print a copy/paste-ready console access block. Serial Port 1 is the IOS console. Serial Port 2 is the aux/Linux shell path.
 
-The web UI should place this result panel above or instead of the completed progress panel so users see the console access details first. It should also render clickable `telnet://<esxi-host>:<port>` links next to the copy/paste commands. The links depend on the user's browser and operating system having a telnet handler configured, so the plain commands must remain visible.
+The web UI should place this result panel above or instead of the completed progress panel so users see the console access details first. Dry-run results must show only the plain summary. Completed deployment results should render clickable `telnet://<esxi-host>:<port>` links next to the copy/paste commands, with copy buttons for each command. The links depend on the user's browser and operating system having a telnet handler configured, so the plain commands must remain visible.
+
+Completed deployment results should also include a `Manage Port Group in ESXi` link that opens `https://<esxi-host>/ui` in a new browser tab. The automation still does not change port groups.
 
 Example:
 

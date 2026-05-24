@@ -51,9 +51,25 @@ function renderConsoleLinks(result) {
   consoleLinks.innerHTML = "";
   const host = result?.esxi_host;
   const vms = result?.vms || [];
-  if (!host || vms.length === 0) {
+  if (result?.mode !== "deploy" || !host || vms.length === 0) {
     return;
   }
+
+  const manageCard = document.createElement("article");
+  manageCard.className = "console-card manage-card";
+
+  const manageTitle = document.createElement("h3");
+  manageTitle.textContent = "Manage Port Group in ESXi";
+
+  const manageLink = document.createElement("a");
+  manageLink.className = "manage-link";
+  manageLink.href = `https://${host}/ui`;
+  manageLink.target = "_blank";
+  manageLink.rel = "noopener";
+  manageLink.textContent = host;
+
+  manageCard.append(manageTitle, manageLink);
+  consoleLinks.append(manageCard);
 
   for (const vm of vms) {
     const card = document.createElement("article");
@@ -75,16 +91,56 @@ function renderConsoleLinks(result) {
       const labelNode = document.createElement("span");
       labelNode.textContent = label;
 
+      const command = `telnet ${host} ${port}`;
+      const commandGroup = document.createElement("div");
+      commandGroup.className = "console-command";
+
       const link = document.createElement("a");
       link.href = `telnet://${host}:${port}`;
-      link.textContent = `telnet ${host} ${port}`;
+      link.textContent = command;
       link.rel = "noopener";
 
-      row.append(labelNode, link);
+      const copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "copy-command";
+      copyButton.title = `Copy ${command}`;
+      copyButton.setAttribute("aria-label", `Copy ${command}`);
+      copyButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M5 15V7a2 2 0 0 1 2-2h8"></path></svg>';
+      copyButton.addEventListener("click", () => copyCommand(command, copyButton));
+
+      commandGroup.append(link, copyButton);
+      row.append(labelNode, commandGroup);
       card.append(row);
     }
 
     consoleLinks.append(card);
+  }
+}
+
+async function copyCommand(command, button) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(command);
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = command;
+      textArea.setAttribute("readonly", "");
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.append(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      textArea.remove();
+    }
+    const previousTitle = button.title;
+    button.classList.add("copied");
+    button.title = "Copied";
+    setTimeout(() => {
+      button.classList.remove("copied");
+      button.title = previousTitle;
+    }, 1200);
+  } catch {
+    button.title = "Copy failed";
   }
 }
 

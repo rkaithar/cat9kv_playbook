@@ -33,4 +33,4 @@ python -m uvicorn webapp.app:app --host 127.0.0.1 --port 8080
 
 The deployed lab service is exposed through nginx at `http://10.76.90.60/`. The raw `/images/` directory listing is disabled, but direct image URLs remain available for automation.
 
-The UI supports dry-run planning and deployment progress. At the end of a run it shows clickable `telnet://` links and copy/paste telnet commands for the IOS console and aux/Linux shell for every created VM.
+The UI supports dry-run planning and deployment progress. Dry runs show a plain summary only. Completed deployments show clickable `telnet://` links, copy buttons for the telnet commands, and a link to the target ESXi UI for port-group changes.

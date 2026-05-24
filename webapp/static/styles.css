@@ -251,6 +251,28 @@ button:disabled {
   letter-spacing: 0;
 }
 
+.manage-card {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.manage-card h3 {
+  margin: 0;
+}
+
+.manage-link {
+  color: var(--blue);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.manage-link:hover {
+  text-decoration: underline;
+}
+
 .console-row {
   display: grid;
   grid-template-columns: 130px minmax(0, 1fr);
@@ -265,7 +287,14 @@ button:disabled {
   font-weight: 700;
 }
 
-.console-row a {
+.console-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.console-command a {
   color: var(--blue);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-weight: 700;
@@ -273,8 +302,32 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
-.console-row a:hover {
+.console-command a:hover {
   text-decoration: underline;
+}
+
+.copy-command {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #b8c8d8;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--blue);
+}
+
+.copy-command svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.copy-command.copied {
+  border-color: var(--green);
+  color: var(--green);
+  background: #ecf8f4;
 }
 
 pre {
@@ -323,7 +376,13 @@ pre {
   }
 
   .console-links,
-  .console-row {
+  .console-row,
+  .console-command,
+  .manage-card {
     grid-template-columns: 1fr;
+  }
+
+  .manage-card {
+    align-items: flex-start;
   }
 }

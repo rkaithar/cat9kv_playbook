@@ -46,7 +46,15 @@ Key points from those notes:
 | Serial port 1 | `telnet://:8021`, connect at power on |
 | Serial port 2 | `telnet://:8022`, connect at power on |
 
-For OVA deployment, keep the OVA-defined hardware. The known-working 17.18.03 OVA on ESXi imported with `4 vCPU`, `18 GB RAM`, a `16 GB` thin disk, 9 x `E1000` NICs, and an OVA-provided CD/DVD device image on IDE. At the time of this update, `17.18.03` was not visible on the `10.76.90.102` HTTP listing, so it is not in the example catalog until the file server exposes it again.
+For OVA deployment, keep the OVA-defined hardware. The known-working 17.18.03 OVA on ESXi imported with `4 vCPU`, `18 GB RAM`, a `16 GB` thin disk, 9 x `E1000` NICs, and an OVA-provided CD/DVD device image on IDE.
+
+Available local image versions on the Ubuntu file server:
+
+| Version | Token | OVA URL | ISO URL |
+| --- | --- | --- | --- |
+| `17.15.04` | `171504` | `http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.ova` | `http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso` |
+| `17.18.03` | `17183` | `http://10.76.90.60/images/cat9kv-universalk9_serial.17.18.03.ova` | `http://10.76.90.60/images/cat9kv-universalk9_serial.17.18.03.iso` |
+| `BLD_V261_THROTTLE_LATEST_20260520_183737` | `V26120260520` | `http://10.76.90.60/images/cat9kv-universalk9_serial.BLD_V261_THROTTLE_LATEST_20260520_183737.ova` | `http://10.76.90.60/images/cat9kv-universalk9_serial.BLD_V261_THROTTLE_LATEST_20260520_183737.iso` |
 
 ## Image File Filter
 
@@ -333,6 +341,15 @@ versions:
     token: "171504"
     ova_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.ova"
     iso_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.15.04.iso"
+    deployment_method: ova
+    ova_keep_hardware_defaults: true
+    ensure_serial_ports: true
+    serial_base: 8021
+    serial_step: 10
+  "17.18.03":
+    token: "17183"
+    ova_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.18.03.ova"
+    iso_url: "http://10.76.90.60/images/cat9kv-universalk9_serial.17.18.03.iso"
     deployment_method: ova
     ova_keep_hardware_defaults: true
     ensure_serial_ports: true

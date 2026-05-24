@@ -482,6 +482,40 @@ For dry runs, use the same block but mark each VM as `planned` instead of `power
 
 Do not embed an interactive serial console in the v1 web app. An in-browser console requires a server-side telnet proxy, WebSocket terminal, session cleanup, and additional authentication/error handling. Keep v1 reliable by showing validated telnet access details and leaving terminal handling to the user's local telnet client.
 
+### Audit and Usage Tracking
+
+The web app must write an append-only JSONL audit log on the Ubuntu host. The default path is:
+
+```text
+/opt/cat9kv-playbook/logs/audit.jsonl
+```
+
+Each workflow should write a `job_started` record and a final `job_completed` record. Do not write ESXi passwords or imported OVA spec files to the audit log.
+
+Required audit fields:
+
+| Field | Purpose |
+| --- | --- |
+| `time` | UTC timestamp |
+| `job_id` | Correlates start and completion |
+| `client_ip` | Incoming web client IP |
+| `esxi_host` | Target ESXi IP/FQDN |
+| `mode` | `dry_run` or `deploy` |
+| `version` | Selected Cat9kV version |
+| `requested_vm_count` | User-requested VM count |
+| `status` | `success` or `error` on completion |
+| `planned_vm_count` | Number of planned VMs |
+| `created_vm_count` | Number of VMs actually created |
+| `vm_names` | Planned or created VM names |
+| `duration_seconds` | Workflow duration |
+| `error` | Friendly error message when failed |
+
+Summarize usage from the Ubuntu host:
+
+```sh
+python3 /opt/cat9kv-playbook/scripts/audit_summary.py
+```
+
 ### Out of Scope for Basic Engine
 
 Do not include these in the basic engine:

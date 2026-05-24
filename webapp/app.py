@@ -14,9 +14,9 @@ import time
 from typing import Any
 import uuid
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request as UrlRequest, urlopen
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -31,6 +31,7 @@ STATIC_DIR = APP_DIR / "static"
 CATALOG_PATH = Path(os.environ.get("CAT9KV_CATALOG", REPO_DIR / "config/version-catalog.example.yaml"))
 IMAGE_DIR = Path(os.environ.get("CAT9KV_IMAGE_DIR", "/srv/cat9kv/images"))
 GOVC_BIN = os.environ.get("GOVC_BIN", "govc")
+AUDIT_LOG = Path(os.environ.get("CAT9KV_AUDIT_LOG", REPO_DIR / "logs/audit.jsonl"))
 SUPPORT_EMAIL = "rkaithar@cisco.com"
 DEFAULT_RESOURCE_POOL = "/ha-datacenter/host/localhost./Resources"
 
@@ -40,6 +41,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
+AUDIT_LOCK = threading.Lock()
 
 
 class DeployRequest(BaseModel):
@@ -73,12 +75,13 @@ def image_path_from_url(url: str) -> Path:
     return IMAGE_DIR / filename
 
 
-def make_job() -> str:
+def make_job(client_ip: str) -> str:
     job_id = uuid.uuid4().hex
     with JOBS_LOCK:
         JOBS[job_id] = {
             "id": job_id,
             "created_at": now_iso(),
+            "client_ip": client_ip,
             "updated_at": now_iso(),
             "status": "queued",
             "phase": "Queued",
@@ -89,6 +92,23 @@ def make_job() -> str:
             "support_email": SUPPORT_EMAIL,
         }
     return job_id
+
+
+def append_audit(record: dict[str, Any]) -> None:
+    payload = {"time": now_iso(), **record}
+    AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with AUDIT_LOCK:
+        with AUDIT_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def client_ip_from_request(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
 
 
 def update_job(job_id: str, *, status: str | None = None, phase: str | None = None,
@@ -227,7 +247,7 @@ def port_open(host: str, port: int) -> bool:
 
 
 def http_head(url: str) -> dict[str, Any]:
-    request = Request(url, method="HEAD")
+    request = UrlRequest(url, method="HEAD")
     with urlopen(request, timeout=10) as response:
         return {
             "status": response.status,
@@ -390,8 +410,18 @@ def friendly_error(exc: Exception) -> str:
     return text
 
 
-def run_job(job_id: str, request: DeployRequest) -> None:
+def run_job(job_id: str, request: DeployRequest, client_ip: str) -> None:
     si = None
+    started = time.monotonic()
+    append_audit({
+        "action": "job_started",
+        "job_id": job_id,
+        "client_ip": client_ip,
+        "esxi_host": request.esxi_host,
+        "mode": request.mode,
+        "version": request.version,
+        "requested_vm_count": request.vm_count,
+    })
     try:
         update_job(job_id, status="running", phase="Validating input", progress=5, event="Starting Cat9kV ESXi workflow")
         catalog = load_catalog()
@@ -426,6 +456,20 @@ def run_job(job_id: str, request: DeployRequest) -> None:
 
         if request.mode == "dry_run":
             summary = console_summary(request.esxi_host, request.version, datastore["name"], planned_vms)
+            append_audit({
+                "action": "job_completed",
+                "job_id": job_id,
+                "client_ip": client_ip,
+                "esxi_host": request.esxi_host,
+                "mode": request.mode,
+                "version": request.version,
+                "status": "success",
+                "requested_vm_count": request.vm_count,
+                "planned_vm_count": len(planned_vms),
+                "created_vm_count": 0,
+                "vm_names": [vm["name"] for vm in planned_vms],
+                "duration_seconds": round(time.monotonic() - started, 1),
+            })
             update_job(job_id, status="completed", phase="Dry run complete", progress=100, event="Dry run completed without ESXi changes", result={
                 "mode": request.mode,
                 "esxi_host": request.esxi_host,
@@ -470,6 +514,20 @@ def run_job(job_id: str, request: DeployRequest) -> None:
         update_job(job_id, phase="Verifying serial consoles", progress=92, event="Checking serial console reachability")
         verified = [verify_vm(vm, request.esxi_host, env) for vm in deployed]
         summary = console_summary(request.esxi_host, request.version, datastore["name"], verified)
+        append_audit({
+            "action": "job_completed",
+            "job_id": job_id,
+            "client_ip": client_ip,
+            "esxi_host": request.esxi_host,
+            "mode": request.mode,
+            "version": request.version,
+            "status": "success",
+            "requested_vm_count": request.vm_count,
+            "planned_vm_count": len(planned_vms),
+            "created_vm_count": len(verified),
+            "vm_names": [vm["name"] for vm in verified],
+            "duration_seconds": round(time.monotonic() - started, 1),
+        })
         update_job(job_id, status="completed", phase="Completed", progress=100, event="Deployment completed", result={
             "mode": request.mode,
             "esxi_host": request.esxi_host,
@@ -480,6 +538,20 @@ def run_job(job_id: str, request: DeployRequest) -> None:
         })
     except Exception as exc:
         message = friendly_error(exc)
+        append_audit({
+            "action": "job_completed",
+            "job_id": job_id,
+            "client_ip": client_ip,
+            "esxi_host": request.esxi_host,
+            "mode": request.mode,
+            "version": request.version,
+            "status": "error",
+            "requested_vm_count": request.vm_count,
+            "planned_vm_count": 0,
+            "created_vm_count": 0,
+            "error": message,
+            "duration_seconds": round(time.monotonic() - started, 1),
+        })
         update_job(
             job_id,
             status="error",
@@ -522,9 +594,10 @@ def versions() -> dict[str, Any]:
 
 
 @app.post("/api/deploy")
-def deploy(request: DeployRequest) -> dict[str, str]:
-    job_id = make_job()
-    thread = threading.Thread(target=run_job, args=(job_id, request), daemon=True)
+def deploy(request_payload: DeployRequest, request: Request) -> dict[str, str]:
+    client_ip = client_ip_from_request(request)
+    job_id = make_job(client_ip)
+    thread = threading.Thread(target=run_job, args=(job_id, request_payload, client_ip), daemon=True)
     thread.start()
     return {"job_id": job_id}
 

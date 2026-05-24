@@ -171,6 +171,28 @@ After login, the script should fetch:
 4. Existing VM serial-port telnet URIs, where visible.
 5. Whether the selected OVA/ISO already exists in the datastore or is reachable over HTTP.
 
+## Target ESXi Compatibility Precheck
+
+The Ubuntu server at `10.76.90.60` can deploy to any ESXi host that is reachable from the Ubuntu server and accepts the provided ESXi credentials. The deployment engine does not depend on the ESXi host being `.41`.
+
+Before import, the engine must check the target ESXi host:
+
+1. vSphere API login succeeds.
+2. `govc about` returns the ESXi product version and build.
+3. At least one datastore is accessible and has enough free space.
+4. ESXi can reach the Ubuntu image URLs over HTTP, or the automation host can upload the OVA through `govc`.
+5. The ESXi firewall rule `remoteSerialPort` is enabled, or the user has approved enabling it.
+6. The selected OVA can be parsed with `govc import.spec`.
+7. The OVA virtual hardware type is compatible with the target ESXi host.
+
+The current local Cat9kV OVAs advertise these OVF hardware compatibility values:
+
+```text
+vmx-10 vmx-11 vmx-13
+```
+
+They also use standard ESXi virtual devices: `other3xLinux64Guest`, `VirtualSCSI`, IDE CD-ROM, E1000 NICs, and optional serial ports. There is no ESXi 8-only device requirement in the current OVA metadata. ESXi 7.x and 8.x should be normal targets. Older ESXi releases should be treated as lab-only until the dry run confirms `govc import.spec`, datastore placement, serial-port backing, and boot behavior.
+
 ## Optional Pre-Boot Inputs
 
 These are not required for a basic VM boot, but must be handled before first boot if used.
@@ -394,6 +416,9 @@ Before deployment, the engine must scan all existing VMs for serial URIs and als
    - Selected version exists in the version catalog.
    - OVA URL is reachable.
    - `govc` is installed.
+   - Target ESXi product version/build is reported.
+   - Selected OVA parses successfully with `govc import.spec`.
+   - Selected OVA hardware compatibility includes a VMX level supported by the target ESXi host.
    - Datastore has enough free space for `Number of Virtual Cat9k for this ESXi * OVA expanded size`.
    - Serial ports and VM names are free.
    - `remoteSerialPort` firewall rule is enabled.

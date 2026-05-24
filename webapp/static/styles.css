@@ -1,0 +1,278 @@
+:root {
+  color-scheme: light;
+  --bg: #eef2f5;
+  --panel: #ffffff;
+  --text: #1d2730;
+  --muted: #637282;
+  --line: #d8e0e7;
+  --blue: #0b6fae;
+  --green: #0c7b5f;
+  --amber: #a05d00;
+  --red: #b42318;
+  --shadow: 0 18px 45px rgba(29, 39, 48, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.shell {
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 32px 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 24px;
+  margin-bottom: 18px;
+}
+
+.masthead,
+.progress-header,
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: 28px;
+}
+
+h2 {
+  font-size: 20px;
+}
+
+.status-pill {
+  min-width: 86px;
+  padding: 8px 12px;
+  border: 1px solid #b8c8d8;
+  border-radius: 999px;
+  color: #22516f;
+  background: #edf7ff;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: end;
+}
+
+label,
+fieldset {
+  min-width: 0;
+}
+
+label span,
+legend {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+input,
+select {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #b8c8d8;
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+}
+
+input:focus,
+select:focus,
+button:focus {
+  outline: 3px solid rgba(11, 111, 174, 0.2);
+  outline-offset: 1px;
+  border-color: var(--blue);
+}
+
+.mode-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.mode-group legend {
+  grid-column: 1 / -1;
+}
+
+.mode-option {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #b8c8d8;
+  border-radius: 6px;
+  padding: 0 10px;
+}
+
+.mode-option span {
+  margin: 0;
+  color: var(--text);
+}
+
+.mode-option input {
+  width: 16px;
+  height: 16px;
+}
+
+button {
+  height: 42px;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  background: var(--green);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.button-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.progress-track {
+  height: 12px;
+  border-radius: 999px;
+  background: #d9e4ec;
+  overflow: hidden;
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  transition: width 240ms ease;
+}
+
+.percent {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--green);
+}
+
+.event-list {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.event-list li {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 14px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.event-list li:last-child {
+  border-bottom: 0;
+}
+
+.event-time {
+  color: var(--muted);
+}
+
+pre {
+  margin: 0;
+  padding: 18px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #101820;
+  color: #f7fbff;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.error-panel {
+  border-color: rgba(180, 35, 24, 0.3);
+}
+
+.error-panel h2 {
+  color: var(--red);
+  margin-bottom: 8px;
+}
+
+.error-panel p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 860px) {
+  .shell {
+    width: min(100vw - 20px, 720px);
+    padding: 16px 0;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .masthead,
+  .progress-header,
+  .result-header {
+    flex-direction: column;
+  }
+
+  .event-list li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

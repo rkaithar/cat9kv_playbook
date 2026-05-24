@@ -22,3 +22,15 @@ python3 scripts/sync_cat9kv_images.py http://10.76.90.102/ --dest /srv/cat9kv/im
 ```
 
 The script only accepts files whose basename starts with `cat9kv-`, so Cat9K `.bin` images are not pulled into the Cat9kV image repository.
+
+## Web Tool
+
+The Ubuntu host can run the web interface with:
+
+```sh
+python -m uvicorn webapp.app:app --host 127.0.0.1 --port 8080
+```
+
+The deployed lab service is exposed through nginx at `http://10.76.90.60/`. The raw `/images/` directory listing is disabled, but direct image URLs remain available for automation.
+
+The UI supports dry-run planning and deployment progress. At the end of a run it prints copy/paste telnet commands for the IOS console and aux/Linux shell for every created VM.

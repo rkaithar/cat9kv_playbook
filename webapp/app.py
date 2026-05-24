@@ -1,0 +1,538 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import re
+import socket
+import ssl
+import subprocess
+import tempfile
+import threading
+import time
+from typing import Any
+import uuid
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+from pyVim.connect import Disconnect, SmartConnect
+from pyVmomi import vim
+import yaml
+
+
+APP_DIR = Path(__file__).resolve().parent
+REPO_DIR = APP_DIR.parent
+STATIC_DIR = APP_DIR / "static"
+CATALOG_PATH = Path(os.environ.get("CAT9KV_CATALOG", REPO_DIR / "config/version-catalog.example.yaml"))
+IMAGE_DIR = Path(os.environ.get("CAT9KV_IMAGE_DIR", "/srv/cat9kv/images"))
+GOVC_BIN = os.environ.get("GOVC_BIN", "govc")
+SUPPORT_EMAIL = "rkaithar@cisco.com"
+DEFAULT_RESOURCE_POOL = "/ha-datacenter/host/localhost./Resources"
+
+
+app = FastAPI(title="Cat9kV ESXi Deployment Tool")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+JOBS: dict[str, dict[str, Any]] = {}
+JOBS_LOCK = threading.Lock()
+
+
+class DeployRequest(BaseModel):
+    esxi_host: str = Field(min_length=1, max_length=255)
+    username: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=1, max_length=1024)
+    version: str = Field(min_length=1, max_length=128)
+    vm_count: int = Field(default=1, ge=1, le=20)
+    mode: str = Field(default="dry_run", regex="^(dry_run|deploy)$")
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def load_catalog() -> dict[str, Any]:
+    if not CATALOG_PATH.exists():
+        raise RuntimeError(f"catalog not found: {CATALOG_PATH}")
+    with CATALOG_PATH.open(encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    versions = data.get("versions")
+    if not isinstance(versions, dict):
+        raise RuntimeError("catalog is missing a versions map")
+    return versions
+
+
+def image_path_from_url(url: str) -> Path:
+    filename = Path(urlparse(url).path).name
+    if not filename.startswith("cat9kv-"):
+        raise RuntimeError(f"image filename is not a Cat9kV image: {filename}")
+    return IMAGE_DIR / filename
+
+
+def make_job() -> str:
+    job_id = uuid.uuid4().hex
+    with JOBS_LOCK:
+        JOBS[job_id] = {
+            "id": job_id,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+            "status": "queued",
+            "phase": "Queued",
+            "progress": 0,
+            "events": [],
+            "result": None,
+            "error": None,
+            "support_email": SUPPORT_EMAIL,
+        }
+    return job_id
+
+
+def update_job(job_id: str, *, status: str | None = None, phase: str | None = None,
+               progress: int | None = None, event: str | None = None,
+               result: Any | None = None, error: str | None = None) -> None:
+    with JOBS_LOCK:
+        job = JOBS[job_id]
+        if status is not None:
+            job["status"] = status
+        if phase is not None:
+            job["phase"] = phase
+        if progress is not None:
+            job["progress"] = max(job.get("progress", 0), min(progress, 100))
+        if event:
+            job["events"].append({"time": now_iso(), "message": event})
+            job["events"] = job["events"][-250:]
+        if result is not None:
+            job["result"] = result
+        if error is not None:
+            job["error"] = error
+        job["updated_at"] = now_iso()
+
+
+def govc_env(esxi_host: str, username: str, password: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update({
+        "GOVC_URL": f"https://{esxi_host}/sdk",
+        "GOVC_USERNAME": username,
+        "GOVC_PASSWORD": password,
+        "GOVC_INSECURE": "1",
+    })
+    return env
+
+
+def run_govc(args: list[str], env: dict[str, str], *, timeout: int = 300) -> str:
+    completed = subprocess.run(
+        [GOVC_BIN, *args],
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=timeout,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stdout.strip() or f"govc {' '.join(args)} failed")
+    return completed.stdout
+
+
+def stream_govc(args: list[str], env: dict[str, str], job_id: str, *, timeout: int = 1800) -> str:
+    output: list[str] = []
+    process = subprocess.Popen(
+        [GOVC_BIN, *args],
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    start = time.monotonic()
+    assert process.stdout is not None
+    for line in process.stdout:
+        output.append(line)
+        clean = " ".join(line.strip().split())
+        if clean:
+            update_job(job_id, event=clean[:240])
+        if time.monotonic() - start > timeout:
+            process.kill()
+            raise RuntimeError(f"govc {' '.join(args)} timed out")
+    code = process.wait()
+    text = "".join(output)
+    if code != 0:
+        raise RuntimeError(text.strip() or f"govc {' '.join(args)} failed")
+    return text
+
+
+def connect_esxi(esxi_host: str, username: str, password: str):
+    context = ssl._create_unverified_context()
+    return SmartConnect(host=esxi_host, user=username, pwd=password, sslContext=context)
+
+
+def get_inventory(si) -> dict[str, Any]:
+    content = si.RetrieveContent()
+    view = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True)
+    vms = list(view.view)
+    view.Destroy()
+
+    view = content.viewManager.CreateContainerView(content.rootFolder, [vim.Datastore], True)
+    datastores = []
+    for datastore in view.view:
+        summary = datastore.summary
+        datastores.append({
+            "name": summary.name,
+            "type": summary.type,
+            "capacity_gb": round(summary.capacity / 1024 ** 3, 1),
+            "free_gb": round(summary.freeSpace / 1024 ** 3, 1),
+            "accessible": bool(summary.accessible),
+        })
+    view.Destroy()
+
+    used_ports: set[int] = set()
+    vm_names: set[str] = set()
+    for vm in vms:
+        vm_names.add(vm.name)
+        for device in vm.config.hardware.device:
+            if isinstance(device, vim.vm.device.VirtualSerialPort):
+                port = parse_telnet_port(getattr(device.backing, "serviceURI", None))
+                if port:
+                    used_ports.add(port)
+
+    return {
+        "about": {
+            "full_name": content.about.fullName,
+            "version": content.about.version,
+            "build": content.about.build,
+            "api_type": content.about.apiType,
+        },
+        "vm_names": vm_names,
+        "used_ports": used_ports,
+        "datastores": datastores,
+    }
+
+
+def parse_telnet_port(uri: str | None) -> int | None:
+    if not uri:
+        return None
+    match = re.search(r":(\d+)$", uri)
+    return int(match.group(1)) if match else None
+
+
+def port_open(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=1.0):
+            return True
+    except OSError:
+        return False
+
+
+def http_head(url: str) -> dict[str, Any]:
+    request = Request(url, method="HEAD")
+    with urlopen(request, timeout=10) as response:
+        return {
+            "status": response.status,
+            "content_length": int(response.headers.get("Content-Length", "0") or 0),
+        }
+
+
+def select_datastore(datastores: list[dict[str, Any]], vm_count: int) -> dict[str, Any]:
+    required_gb = max(25, vm_count * 25)
+    candidates = [
+        datastore for datastore in datastores
+        if datastore["accessible"] and datastore["free_gb"] >= required_gb
+    ]
+    if not candidates:
+        raise RuntimeError(f"No accessible datastore has at least {required_gb} GB free")
+    return sorted(candidates, key=lambda item: item["free_gb"], reverse=True)[0]
+
+
+def plan_vms(esxi_host: str, version_cfg: dict[str, Any], vm_count: int,
+             existing_names: set[str], used_ports: set[int]) -> list[dict[str, Any]]:
+    base = int(version_cfg["serial_base"])
+    step = int(version_cfg.get("serial_step", 10))
+    token = str(version_cfg["token"])
+    planned: list[dict[str, Any]] = []
+    index = 0
+    while len(planned) < vm_count and index < 500:
+        serial1 = base + index * step
+        serial2 = serial1 + 1
+        name = f"Cat9kv_{token}_{serial1}_{serial2}"
+        has_conflict = (
+            name in existing_names or
+            serial1 in used_ports or
+            serial2 in used_ports or
+            port_open(esxi_host, serial1) or
+            port_open(esxi_host, serial2)
+        )
+        if not has_conflict:
+            planned.append({
+                "name": name,
+                "serial1": serial1,
+                "serial2": serial2,
+                "state": "planned",
+            })
+        index += 1
+    if len(planned) != vm_count:
+        raise RuntimeError("Unable to allocate enough unused serial port pairs")
+    return planned
+
+
+def console_summary(esxi_host: str, version: str, datastore: str, vms: list[dict[str, Any]]) -> str:
+    lines = [
+        "Cat9kV deployment summary",
+        f"ESXi host: {esxi_host}",
+        f"Version: {version}",
+        f"Datastore: {datastore}",
+        "",
+    ]
+    for vm in vms:
+        lines.extend([
+            f"VM: {vm['name']}",
+            f"  Power state: {vm.get('state', 'planned')}",
+            "  IOS console:",
+            f"    telnet {esxi_host} {vm['serial1']}",
+            "  Aux/Linux shell:",
+            f"    telnet {esxi_host} {vm['serial2']}",
+            "",
+        ])
+    lines.extend([
+        "Post-deploy action:",
+        "  Port groups were not changed by this automation.",
+        "  Update VM network adapter port groups manually in ESXi if your topology requires it.",
+    ])
+    return "\n".join(lines)
+
+
+def write_import_spec(local_ova: Path, vm_name: str, env: dict[str, str]) -> Path:
+    raw = run_govc(["import.spec", str(local_ova)], env, timeout=300)
+    spec = json.loads(raw)
+    spec["Name"] = vm_name
+    spec["DiskProvisioning"] = "thin"
+    spec["PowerOn"] = False
+    handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    with handle:
+        json.dump(spec, handle, indent=2)
+    return Path(handle.name)
+
+
+def ensure_serial_ports(vm_name: str, serial1: int, serial2: int, env: dict[str, str]) -> None:
+    output = run_govc(["device.ls", "-vm", vm_name], env, timeout=120)
+    serial_devices = [
+        line.split()[0] for line in output.splitlines()
+        if line.startswith("serialport-")
+    ]
+    while len(serial_devices) < 2:
+        run_govc(["device.serial.add", "-vm", vm_name], env, timeout=120)
+        output = run_govc(["device.ls", "-vm", vm_name], env, timeout=120)
+        serial_devices = [
+            line.split()[0] for line in output.splitlines()
+            if line.startswith("serialport-")
+        ]
+    run_govc(["device.serial.connect", "-vm", vm_name, "-device", serial_devices[0], f"telnet://:{serial1}"], env, timeout=120)
+    run_govc(["device.serial.connect", "-vm", vm_name, "-device", serial_devices[1], f"telnet://:{serial2}"], env, timeout=120)
+
+
+def probe_console(host: str, port: int) -> dict[str, Any]:
+    result = {"port": port, "tcp_open": False, "sample": "", "error": None}
+    try:
+        with socket.create_connection((host, port), timeout=5) as sock:
+            result["tcp_open"] = True
+            sock.settimeout(2)
+            chunks: list[bytes] = []
+            try:
+                data = sock.recv(4096)
+                if data:
+                    chunks.append(data)
+            except socket.timeout:
+                pass
+            try:
+                sock.sendall(b"\r\n")
+            except OSError:
+                pass
+            time.sleep(0.5)
+            try:
+                data = sock.recv(4096)
+                if data:
+                    chunks.append(data)
+            except socket.timeout:
+                pass
+            text = b"".join(chunks).decode("utf-8", errors="replace")
+            result["sample"] = " ".join(text.split())[:240]
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+def verify_vm(vm: dict[str, Any], esxi_host: str, env: dict[str, str]) -> dict[str, Any]:
+    info = run_govc(["vm.info", vm["name"]], env, timeout=120)
+    state = "poweredOn" if "Power state:  poweredOn" in info else "unknown"
+    serial1 = probe_console(esxi_host, int(vm["serial1"]))
+    serial2 = probe_console(esxi_host, int(vm["serial2"]))
+    vm.update({
+        "state": state,
+        "serial1_probe": serial1,
+        "serial2_probe": serial2,
+    })
+    return vm
+
+
+def friendly_error(exc: Exception) -> str:
+    text = str(exc)
+    lower = text.lower()
+    if "invalidlogin" in lower or "incorrect user name or password" in lower:
+        return "ESXi login failed. Verify the ESXi IP, username, and password"
+    if "timed out" in lower or "timeout" in lower:
+        return "The ESXi or image-server operation timed out"
+    if "no accessible datastore" in lower:
+        return text
+    if "not available in the catalog" in lower or "ova is missing" in lower:
+        return text
+    return text
+
+
+def run_job(job_id: str, request: DeployRequest) -> None:
+    si = None
+    try:
+        update_job(job_id, status="running", phase="Validating input", progress=5, event="Starting Cat9kV ESXi workflow")
+        catalog = load_catalog()
+        if request.version not in catalog:
+            raise RuntimeError(f"Version {request.version} is not available in the catalog")
+        version_cfg = catalog[request.version]
+        local_ova = image_path_from_url(version_cfg["ova_url"])
+        if not local_ova.exists():
+            raise RuntimeError(f"OVA is missing on the image server: {local_ova.name}")
+
+        update_job(job_id, phase="Connecting to ESXi", progress=12, event=f"Connecting to ESXi host {request.esxi_host}")
+        si = connect_esxi(request.esxi_host, request.username, request.password)
+        inventory = get_inventory(si)
+        env = govc_env(request.esxi_host, request.username, request.password)
+        update_job(job_id, event=f"Target ESXi: {inventory['about']['full_name']} build {inventory['about']['build']}")
+
+        update_job(job_id, phase="Checking images and import metadata", progress=22, event="Checking local image URL and OVA metadata")
+        http_head(version_cfg["ova_url"])
+        http_head(version_cfg["iso_url"])
+        run_govc(["import.spec", str(local_ova)], env, timeout=300)
+
+        update_job(job_id, phase="Planning placement", progress=32, event="Selecting datastore and serial ports")
+        datastore = select_datastore(inventory["datastores"], request.vm_count)
+        planned_vms = plan_vms(
+            request.esxi_host,
+            version_cfg,
+            request.vm_count,
+            inventory["vm_names"],
+            inventory["used_ports"],
+        )
+        update_job(job_id, event=f"Selected datastore {datastore['name']} with {datastore['free_gb']} GB free")
+
+        if request.mode == "dry_run":
+            summary = console_summary(request.esxi_host, request.version, datastore["name"], planned_vms)
+            update_job(job_id, status="completed", phase="Dry run complete", progress=100, event="Dry run completed without ESXi changes", result={
+                "mode": request.mode,
+                "esxi_host": request.esxi_host,
+                "version": request.version,
+                "datastore": datastore,
+                "vms": planned_vms,
+                "summary": summary,
+            })
+            return
+
+        update_job(job_id, phase="Configuring ESXi", progress=38, event="Enabling remote serial port firewall rule")
+        run_govc(["host.esxcli", "network", "firewall", "ruleset", "set", "-e", "true", "-r", "remoteSerialPort"], env, timeout=120)
+
+        deployed: list[dict[str, Any]] = []
+        total = len(planned_vms)
+        for index, vm in enumerate(planned_vms, start=1):
+            update_job(job_id, phase="Copying OVA to ESXi", progress=40 + int((index - 1) * 35 / total), event=f"Importing {vm['name']}")
+            spec_path = write_import_spec(local_ova, vm["name"], env)
+            try:
+                stream_govc(
+                    [
+                        "import.ova",
+                        f"-options={spec_path}",
+                        f"-ds={datastore['name']}",
+                        f"-pool={DEFAULT_RESOURCE_POOL}",
+                        str(local_ova),
+                    ],
+                    env,
+                    job_id,
+                    timeout=2400,
+                )
+            finally:
+                spec_path.unlink(missing_ok=True)
+
+            update_job(job_id, phase="Configuring ESXi", progress=75 + int((index - 1) * 10 / total), event=f"Configuring serial ports for {vm['name']}")
+            ensure_serial_ports(vm["name"], int(vm["serial1"]), int(vm["serial2"]), env)
+
+            update_job(job_id, phase="Powering on VMs", progress=85 + int((index - 1) * 5 / total), event=f"Powering on {vm['name']}")
+            run_govc(["vm.power", "-on", vm["name"]], env, timeout=180)
+            deployed.append(vm)
+
+        update_job(job_id, phase="Verifying serial consoles", progress=92, event="Checking serial console reachability")
+        verified = [verify_vm(vm, request.esxi_host, env) for vm in deployed]
+        summary = console_summary(request.esxi_host, request.version, datastore["name"], verified)
+        update_job(job_id, status="completed", phase="Completed", progress=100, event="Deployment completed", result={
+            "mode": request.mode,
+            "esxi_host": request.esxi_host,
+            "version": request.version,
+            "datastore": datastore,
+            "vms": verified,
+            "summary": summary,
+        })
+    except Exception as exc:
+        message = friendly_error(exc)
+        update_job(
+            job_id,
+            status="error",
+            phase="Error",
+            progress=100,
+            event=f"Error: {message}",
+            error=f"{message}. Contact {SUPPORT_EMAIL} for further help.",
+        )
+    finally:
+        if si is not None:
+            Disconnect(si)
+
+
+@app.get("/")
+def index() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/api/versions")
+def versions() -> dict[str, Any]:
+    try:
+        catalog = load_catalog()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "versions": [
+            {
+                "name": name,
+                "token": cfg.get("token"),
+                "deployment_method": cfg.get("deployment_method", "ova"),
+            }
+            for name, cfg in catalog.items()
+        ]
+    }
+
+
+@app.post("/api/deploy")
+def deploy(request: DeployRequest) -> dict[str, str]:
+    job_id = make_job()
+    thread = threading.Thread(target=run_job, args=(job_id, request), daemon=True)
+    thread.start()
+    return {"job_id": job_id}
+
+
+@app.get("/api/jobs/{job_id}")
+def job_status(job_id: str) -> dict[str, Any]:
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+        return dict(job)

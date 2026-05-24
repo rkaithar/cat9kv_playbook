@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cat9kV ESXi Deployment Tool</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="masthead">
+          <div>
+            <p class="eyebrow">Cat9kV ESXi</p>
+            <h1>Welcome to the Cat9kV ESXi Deployment Tool</h1>
+          </div>
+          <div class="status-pill" id="serviceStatus">Ready</div>
+        </div>
+
+        <form id="deployForm" class="form-grid">
+          <label>
+            <span>ESXi IP or FQDN</span>
+            <input name="esxi_host" autocomplete="off" placeholder="10.76.90.41" required>
+          </label>
+
+          <label>
+            <span>Username</span>
+            <input name="username" autocomplete="username" placeholder="root" required>
+          </label>
+
+          <label>
+            <span>Password</span>
+            <input name="password" type="password" autocomplete="current-password" required>
+          </label>
+
+          <label>
+            <span>Cat9kV Version</span>
+            <select name="version" id="versionSelect" required></select>
+          </label>
+
+          <label>
+            <span>Number of Virtual Cat9k for this ESXi</span>
+            <input name="vm_count" type="number" min="1" max="20" value="1" required>
+          </label>
+
+          <fieldset class="mode-group">
+            <legend>Run Mode</legend>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="dry_run" checked>
+              <span>Dry run</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="deploy">
+              <span>Deploy</span>
+            </label>
+          </fieldset>
+
+          <button type="submit" id="submitButton">
+            <span class="button-icon">▶</span>
+            <span>Start</span>
+          </button>
+        </form>
+      </section>
+
+      <section class="panel progress-panel" id="progressPanel" hidden>
+        <div class="progress-header">
+          <div>
+            <p class="eyebrow">Current Step</p>
+            <h2 id="phaseText">Queued</h2>
+          </div>
+          <div class="percent" id="progressPercent">0%</div>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <ol class="event-list" id="eventList"></ol>
+      </section>
+
+      <section class="panel result-panel" id="resultPanel" hidden>
+        <div class="result-header">
+          <div>
+            <p class="eyebrow">Result</p>
+            <h2 id="resultTitle">Deployment Summary</h2>
+          </div>
+        </div>
+        <pre id="summaryBlock"></pre>
+      </section>
+
+      <section class="panel error-panel" id="errorPanel" hidden>
+        <p class="eyebrow">Error</p>
+        <h2>Workflow stopped</h2>
+        <p id="errorText"></p>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

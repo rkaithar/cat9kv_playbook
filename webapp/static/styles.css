@@ -231,6 +231,52 @@ button:disabled {
   color: var(--muted);
 }
 
+.console-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.console-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px;
+  background: #f8fbfd;
+}
+
+.console-card h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.console-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.console-row span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.console-row a {
+  color: var(--blue);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-weight: 700;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.console-row a:hover {
+  text-decoration: underline;
+}
+
 pre {
   margin: 0;
   padding: 18px;
@@ -274,5 +320,10 @@ pre {
   .event-list li {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .console-links,
+  .console-row {
+    grid-template-columns: 1fr;
   }
 }

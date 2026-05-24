@@ -10,6 +10,7 @@ const eventList = document.querySelector("#eventList");
 const resultPanel = document.querySelector("#resultPanel");
 const resultTitle = document.querySelector("#resultTitle");
 const summaryBlock = document.querySelector("#summaryBlock");
+const consoleLinks = document.querySelector("#consoleLinks");
 const errorPanel = document.querySelector("#errorPanel");
 const errorText = document.querySelector("#errorText");
 
@@ -24,6 +25,7 @@ function resetPanels() {
   resultPanel.hidden = true;
   errorPanel.hidden = true;
   eventList.innerHTML = "";
+  consoleLinks.innerHTML = "";
   summaryBlock.textContent = "";
   errorText.textContent = "";
   progressFill.style.width = "0%";
@@ -42,6 +44,47 @@ function renderEvents(events) {
     message.textContent = event.message;
     li.append(time, message);
     eventList.append(li);
+  }
+}
+
+function renderConsoleLinks(result) {
+  consoleLinks.innerHTML = "";
+  const host = result?.esxi_host;
+  const vms = result?.vms || [];
+  if (!host || vms.length === 0) {
+    return;
+  }
+
+  for (const vm of vms) {
+    const card = document.createElement("article");
+    card.className = "console-card";
+
+    const title = document.createElement("h3");
+    title.textContent = vm.name;
+    card.append(title);
+
+    const ports = [
+      ["IOS console", vm.serial1],
+      ["Aux/Linux shell", vm.serial2],
+    ];
+
+    for (const [label, port] of ports) {
+      const row = document.createElement("div");
+      row.className = "console-row";
+
+      const labelNode = document.createElement("span");
+      labelNode.textContent = label;
+
+      const link = document.createElement("a");
+      link.href = `telnet://${host}:${port}`;
+      link.textContent = `telnet ${host} ${port}`;
+      link.rel = "noopener";
+
+      row.append(labelNode, link);
+      card.append(row);
+    }
+
+    consoleLinks.append(card);
   }
 }
 
@@ -78,7 +121,9 @@ async function pollJob(jobId) {
     submitButton.disabled = false;
     setStatus("Complete");
     resultPanel.hidden = false;
+    progressPanel.hidden = true;
     resultTitle.textContent = job.result?.mode === "dry_run" ? "Dry Run Summary" : "Deployment Summary";
+    renderConsoleLinks(job.result);
     summaryBlock.textContent = job.result?.summary || "";
     return;
   }

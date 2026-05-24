@@ -62,6 +62,17 @@
         </form>
       </section>
 
+      <section class="panel result-panel" id="resultPanel" hidden>
+        <div class="result-header">
+          <div>
+            <p class="eyebrow">Result</p>
+            <h2 id="resultTitle">Deployment Summary</h2>
+          </div>
+        </div>
+        <div class="console-links" id="consoleLinks"></div>
+        <pre id="summaryBlock"></pre>
+      </section>
+
       <section class="panel progress-panel" id="progressPanel" hidden>
         <div class="progress-header">
           <div>
@@ -74,16 +85,6 @@
           <div class="progress-fill" id="progressFill"></div>
         </div>
         <ol class="event-list" id="eventList"></ol>
-      </section>
-
-      <section class="panel result-panel" id="resultPanel" hidden>
-        <div class="result-header">
-          <div>
-            <p class="eyebrow">Result</p>
-            <h2 id="resultTitle">Deployment Summary</h2>
-          </div>
-        </div>
-        <pre id="summaryBlock"></pre>
       </section>
 
       <section class="panel error-panel" id="errorPanel" hidden>

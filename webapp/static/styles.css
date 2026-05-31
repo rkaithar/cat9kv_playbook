@@ -306,6 +306,11 @@ button:disabled {
   text-decoration: underline;
 }
 
+.network-status {
+  color: var(--amber);
+  font-size: 13px;
+}
+
 .copy-command {
   width: 34px;
   height: 34px;

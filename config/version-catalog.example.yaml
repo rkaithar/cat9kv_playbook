@@ -6,6 +6,7 @@ versions:
     deployment_method: ova
     ova_keep_hardware_defaults: true
     ensure_serial_ports: true
+    disconnect_network_adapters: true
     serial_base: 8021
     serial_step: 10
   "17.18.03":
@@ -15,6 +16,7 @@ versions:
     deployment_method: ova
     ova_keep_hardware_defaults: true
     ensure_serial_ports: true
+    disconnect_network_adapters: true
     serial_base: 8021
     serial_step: 10
   "BLD_V261_THROTTLE_LATEST_20260520_183737":
@@ -24,5 +26,6 @@ versions:
     deployment_method: ova
     ova_keep_hardware_defaults: true
     ensure_serial_ports: true
+    disconnect_network_adapters: true
     serial_base: 9021
     serial_step: 10

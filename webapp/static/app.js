@@ -84,6 +84,21 @@ function renderConsoleLinks(result) {
       ["Aux/Linux shell", vm.serial2],
     ];
 
+    if (Number.isInteger(vm.network_adapters_disconnected)) {
+      const networkRow = document.createElement("div");
+      networkRow.className = "console-row";
+
+      const networkLabel = document.createElement("span");
+      networkLabel.textContent = "Network adapters";
+
+      const networkValue = document.createElement("strong");
+      networkValue.className = "network-status";
+      networkValue.textContent = `${vm.network_adapters_disconnected} disconnected`;
+
+      networkRow.append(networkLabel, networkValue);
+      card.append(networkRow);
+    }
+
     for (const [label, port] of ports) {
       const row = document.createElement("div");
       row.className = "console-row";

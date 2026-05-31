@@ -8,8 +8,9 @@ The current scope is intentionally small:
 2. Use a VM naming convention that includes the IOS-XE version token and serial console ports.
 3. Discover datastore and ESXi inventory instead of assuming fixed names.
 4. Leave port-group/interface mapping to the user after VM creation.
-5. Ensure two network-backed serial ports even when an OVA does not include them.
-6. Keep credentials out of files and prompt for them at runtime.
+5. Disconnect OVA-created Ethernet adapters before first boot to avoid accidental ESXi L2 loops.
+6. Ensure two network-backed serial ports even when an OVA does not include them.
+7. Keep credentials out of files and prompt for them at runtime.
 
 Start with [docs/cat9kv-esxi-runbook.md](docs/cat9kv-esxi-runbook.md).
 
@@ -33,11 +34,11 @@ python -m uvicorn webapp.app:app --host 127.0.0.1 --port 8080
 
 The deployed lab service is exposed through nginx at `http://10.76.90.60/`. The raw `/images/` directory listing is disabled, but direct image URLs remain available for automation.
 
-The UI supports dry-run planning and deployment progress. Dry runs show a plain summary only. Completed deployments show clickable `telnet://` links, copy buttons for the telnet commands, and a link to the target ESXi UI for port-group changes.
+The UI supports dry-run planning and deployment progress. Dry runs show a plain summary only. Completed deployments show clickable `telnet://` links, copy buttons for the telnet commands, the count of disconnected network adapters, and a link to the target ESXi UI for port-group changes.
 
 ## Audit Log
 
-The web service writes deployment audit records to `/opt/cat9kv-playbook/logs/audit.jsonl` on the Ubuntu host. Each record excludes passwords and includes the client IP, ESXi host, mode, version, requested VM count, status, VM names, created VM count, and duration.
+The web service writes deployment audit records to `/opt/cat9kv-playbook/logs/audit.jsonl` on the Ubuntu host. Each record excludes passwords and includes the client IP, ESXi host, mode, version, requested VM count, status, VM names, created VM count, disconnected adapter count, and duration.
 
 Summarize usage with:
 

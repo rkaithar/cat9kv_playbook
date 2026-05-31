@@ -55,6 +55,7 @@ def main() -> int:
     print(f"Failed completions: {len(failed)}")
     print(f"Unique client IPs: {len({record.get('client_ip') for record in records if record.get('client_ip')})}")
     print(f"Total VMs created: {sum(int(record.get('created_vm_count') or 0) for record in success)}")
+    print(f"Total network adapters disconnected: {sum(int(record.get('network_adapters_disconnected') or 0) for record in success)}")
 
     print_counter("By client IP", Counter(record.get("client_ip", "unknown") for record in completed))
     print_counter("By ESXi host", Counter(record.get("esxi_host", "unknown") for record in completed))

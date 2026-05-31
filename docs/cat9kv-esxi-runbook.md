@@ -21,8 +21,9 @@ Key points from those notes:
    - Some OVAs include serial devices already, while some builds do not. The automation must inspect the imported VM, add missing serial devices if needed, then set the final telnet URIs.
 7. ESXi firewall must allow `VM serial port connected over network`.
 8. Do not edit/remove ESXi network adapters casually after creation; Cat9kV interface mapping can be affected.
-9. Datapath/platform selection through `vswitch.xml` ISO is optional for the basic boot path and should be a separate advanced option.
-10. For the 17.18.03 OVA, use `govc import.ova` for import. A raw pyVmomi NFC upload hit an ESXi `403 File exists, but overwrite was not requested` error for the OVA-embedded ISO payload.
+9. Disconnect OVA-created Ethernet adapters before first boot. Keeping all Cat9kV ports connected on one ESXi topology can create L2 loops and cause lab-wide impact.
+10. Datapath/platform selection through `vswitch.xml` ISO is optional for the basic boot path and should be a separate advanced option.
+11. For the 17.18.03 OVA, use `govc import.ova` for import. A raw pyVmomi NFC upload hit an ESXi `403 File exists, but overwrite was not requested` error for the OVA-embedded ISO payload.
 
 ## Current Lab Defaults
 
@@ -39,6 +40,7 @@ Key points from those notes:
 | Guest OS version | `Other 3.x Linux (64-bit)` |
 | Datastore | Discovered from ESXi; do not assume a fixed name |
 | Port groups | Not changed by the basic automation |
+| Ethernet adapters | Disconnected by the basic automation before first boot |
 | vCPU | `8` |
 | Memory | `16 GB` |
 | Disk | `16 GB`, thick provisioned lazy zeroed |
@@ -121,7 +123,7 @@ These should be prompted at the start or accepted as CLI flags.
 
 ## Working OVA Automation Method
 
-Use `govc` for OVA import, then use pyVmomi or the vSphere API to add the two serial ports and power on the VM.
+Use `govc` for OVA import, then use pyVmomi or the vSphere API to add the two serial ports, disconnect Ethernet adapters, and power on the VM.
 
 Known-good flow on a standalone ESXi host:
 
@@ -159,7 +161,12 @@ Inspect the imported VM first. If the OVA already created serial ports, reuse th
 | Serial Port 1 | `telnet://:<serial1>` | IOS console |
 | Serial Port 2 | `telnet://:<serial2>` | IOS-XE aux/Linux shell |
 
-5. Power on the VM.
+5. Disconnect every OVA-created Ethernet adapter:
+   - Set `connected` to `false`.
+   - Set `startConnected` to `false`.
+   - Do not delete NICs and do not change port group mappings.
+
+6. Power on the VM.
 
 ## Discover From ESXi/vCenter
 
@@ -263,10 +270,10 @@ Create a new VM with:
 | CPU | `8` vCPU |
 | Memory | `16 GB` |
 | Hard disk | `16 GB`, thick provisioned lazy zeroed |
-| Network adapter 1 | OVA/default network behavior; user can change port groups manually later |
+| Network adapter 1 | Present but disconnected before first boot; user can change port groups and reconnect manually later |
 | CD/DVD drive | Datastore ISO file, connected, connect at power on |
 
-For OVA deployment, import the OVA and keep its hardware shape. Do not change OVA-created network mappings in the basic automation. Do not delete OVA-created NICs as part of a basic deployment.
+For OVA deployment, import the OVA and keep its hardware shape. Do not change OVA-created network mappings in the basic automation. Do not delete OVA-created NICs as part of a basic deployment. Disconnect all Ethernet adapters before first boot to avoid accidental ESXi switching loops.
 
 ### 4. Add Serial Ports
 
@@ -321,7 +328,7 @@ From ESXi/vSphere:
 3. ISO or OVA-provided boot media is connected as required.
 4. VM has exactly two network-backed serial ports with the expected telnet URIs.
 5. Serial ports are reachable by telnet.
-6. Network adapters are present from the OVA. Port groups are not changed by the basic automation.
+6. Network adapters are present from the OVA, disconnected, and not deleted. Port groups are not changed by the basic automation.
 
 ## Automation Engine Plan
 
@@ -346,11 +353,11 @@ The engine should discover or auto-select:
 | Item | Engine behavior |
 | --- | --- |
 | Datastore | Always discover datastores from ESXi first. If exactly one suitable datastore has enough free space, use it after showing the choice. If multiple suitable datastores exist, ask the user to select. Do not assume `datastore1` exists. |
-| Port group | Do not ask and do not modify. Keep the OVA/default import network behavior. Print a post-deploy message telling the user to change ESXi port groups manually as required. |
+| Port group | Do not ask and do not modify. Keep the OVA/default import mapping, but disconnect all Ethernet adapters before first boot. Print a post-deploy message telling the user to change ESXi port groups and reconnect adapters manually as required. |
 | VM names | Generate from version and serial ports, for example `Cat9kv_171504_8021_8022` |
 | Serial ports | Find unused pairs and embed them in the VM name |
 | OVA/ISO URLs | Load from the local version catalog |
-| OVA network mappings | Do not change in the basic engine. Keep OVA/default network mapping behavior. |
+| OVA network mappings | Do not change in the basic engine. Keep OVA/default mapping values, but leave the adapters disconnected. |
 | Power-on | Default to power on after import |
 
 ### Version Catalog
@@ -366,6 +373,7 @@ versions:
     deployment_method: ova
     ova_keep_hardware_defaults: true
     ensure_serial_ports: true
+    disconnect_network_adapters: true
     serial_base: 8021
     serial_step: 10
   "17.18.03":
@@ -375,6 +383,7 @@ versions:
     deployment_method: ova
     ova_keep_hardware_defaults: true
     ensure_serial_ports: true
+    disconnect_network_adapters: true
     serial_base: 8021
     serial_step: 10
 ```
@@ -434,14 +443,19 @@ Before deployment, the engine must scan all existing VMs for serial URIs and als
    - Add missing serial devices when the OVA did not include them.
    - Set Serial Port 1 to `telnet://:<serial1>` and Serial Port 2 to `telnet://:<serial2>`.
    - Enable connect at power on.
-9. Power on each VM.
-10. Verify:
+9. Disconnect every OVA-created Ethernet adapter with pyVmomi:
+   - Set `connected=false`.
+   - Set `startConnected=false`.
+   - Do not delete NICs and do not alter port groups.
+10. Power on each VM.
+11. Verify:
    - VM exists and is powered on.
    - VM name matches serial-port config.
    - Serial TCP ports are reachable.
    - IOS console shows boot or initial config prompt.
-11. Print a deployment summary with VM names and telnet commands.
-12. Print: `Port groups were not changed by this automation. Update VM network adapter port groups manually in ESXi if your topology requires it.`
+   - Ethernet adapters are present but disconnected.
+12. Print a deployment summary with VM names, telnet commands, and disconnected adapter count.
+13. Print: `Network adapters are disconnected by default to avoid ESXi L2 loops. Map port groups and reconnect adapters manually in ESXi after topology review.`
 
 ### End-of-Run Console Access Summary
 
@@ -461,6 +475,7 @@ Datastore: datastore1
 
 VM: Cat9kv_17183_8061_8062
   Power state: poweredOn
+  Network adapters: 9 disconnected; map/reconnect in ESXi when ready
   IOS console:
     telnet 10.76.90.41 8061
   Aux/Linux shell:
@@ -468,14 +483,15 @@ VM: Cat9kv_17183_8061_8062
 
 VM: Cat9kv_17183_8071_8072
   Power state: poweredOn
+  Network adapters: 9 disconnected; map/reconnect in ESXi when ready
   IOS console:
     telnet 10.76.90.41 8071
   Aux/Linux shell:
     telnet 10.76.90.41 8072
 
 Post-deploy action:
-  Port groups were not changed by this automation.
-  Update VM network adapter port groups manually in ESXi if your topology requires it.
+  Network adapters are disconnected by default to avoid ESXi L2 loops.
+  Map port groups and reconnect adapters manually in ESXi after topology review.
 ```
 
 For dry runs, use the same block but mark each VM as `planned` instead of `poweredOn`.
@@ -506,6 +522,7 @@ Required audit fields:
 | `status` | `success` or `error` on completion |
 | `planned_vm_count` | Number of planned VMs |
 | `created_vm_count` | Number of VMs actually created |
+| `network_adapters_disconnected` | Total Ethernet adapters disconnected before first boot |
 | `vm_names` | Planned or created VM names |
 | `duration_seconds` | Workflow duration |
 | `error` | Friendly error message when failed |
@@ -527,7 +544,7 @@ Do not include these in the basic engine:
 5. Platform/datapath `vswitch.xml` generation.
 6. Day-0 IOS configuration, unless explicitly enabled later.
 
-Network interface mapping should not be changed by the basic engine. For the OVA path, import the OVA as-is and tell the user to update port groups manually after deployment if their topology requires it.
+Network interface mapping should not be changed by the basic engine. For the OVA path, import the OVA as-is, disconnect all Ethernet adapters before first boot, and tell the user to update port groups and reconnect adapters manually after deployment if their topology requires it.
 
 ## Script Variable Template
 
@@ -558,7 +575,8 @@ storage:
   iso_datastore_path: "[<selected-datastore>] ISO/cat9kv-universalk9_serial.17.15.04.iso"
 network:
   modify_portgroups: false
-  post_deploy_message: "Port groups were not changed by this automation. Update VM network adapter port groups manually in ESXi if your topology requires it."
+  disconnect_adapters_before_boot: true
+  post_deploy_message: "Network adapters are disconnected by default to avoid ESXi L2 loops. Map port groups and reconnect adapters manually in ESXi after topology review."
 serial:
   ports:
     - port: 8021

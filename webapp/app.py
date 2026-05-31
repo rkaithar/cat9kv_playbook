@@ -189,6 +189,29 @@ def connect_esxi(esxi_host: str, username: str, password: str):
     return SmartConnect(host=esxi_host, user=username, pwd=password, sslContext=context)
 
 
+def wait_for_task(task, *, timeout: int = 180) -> None:
+    start = time.monotonic()
+    while task.info.state not in (vim.TaskInfo.State.success, vim.TaskInfo.State.error):
+        if time.monotonic() - start > timeout:
+            raise RuntimeError("ESXi task timed out")
+        time.sleep(1)
+    if task.info.state == vim.TaskInfo.State.error:
+        error = task.info.error
+        raise RuntimeError(getattr(error, "localizedMessage", str(error)))
+
+
+def find_vm(si, vm_name: str):
+    content = si.RetrieveContent()
+    view = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True)
+    try:
+        for vm in view.view:
+            if vm.name == vm_name:
+                return vm
+    finally:
+        view.Destroy()
+    raise RuntimeError(f"VM not found after import: {vm_name}")
+
+
 def get_inventory(si) -> dict[str, Any]:
     content = si.RetrieveContent()
     view = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True)
@@ -309,6 +332,7 @@ def console_summary(esxi_host: str, version: str, datastore: str, vms: list[dict
         lines.extend([
             f"VM: {vm['name']}",
             f"  Power state: {vm.get('state', 'planned')}",
+            f"  Network adapters: {network_adapter_summary(vm)}",
             "  IOS console:",
             f"    telnet {esxi_host} {vm['serial1']}",
             "  Aux/Linux shell:",
@@ -317,10 +341,17 @@ def console_summary(esxi_host: str, version: str, datastore: str, vms: list[dict
         ])
     lines.extend([
         "Post-deploy action:",
-        "  Port groups were not changed by this automation.",
-        "  Update VM network adapter port groups manually in ESXi if your topology requires it.",
+        "  Network adapters are disconnected by default to avoid ESXi L2 loops.",
+        "  Map port groups and reconnect adapters manually in ESXi after topology review.",
     ])
     return "\n".join(lines)
+
+
+def network_adapter_summary(vm: dict[str, Any]) -> str:
+    count = vm.get("network_adapters_disconnected")
+    if count is None:
+        return "will be disconnected before first boot"
+    return f"{count} disconnected; map/reconnect in ESXi when ready"
 
 
 def write_import_spec(local_ova: Path, vm_name: str, env: dict[str, str]) -> Path:
@@ -350,6 +381,32 @@ def ensure_serial_ports(vm_name: str, serial1: int, serial2: int, env: dict[str,
         ]
     run_govc(["device.serial.connect", "-vm", vm_name, "-device", serial_devices[0], f"telnet://:{serial1}"], env, timeout=120)
     run_govc(["device.serial.connect", "-vm", vm_name, "-device", serial_devices[1], f"telnet://:{serial2}"], env, timeout=120)
+
+
+def disconnect_network_adapters(si, vm_name: str) -> list[str]:
+    vm = find_vm(si, vm_name)
+    device_changes = []
+    disconnected: list[str] = []
+    for device in vm.config.hardware.device:
+        if not isinstance(device, vim.vm.device.VirtualEthernetCard):
+            continue
+        if device.connectable is None:
+            device.connectable = vim.vm.device.VirtualDevice.ConnectInfo()
+        device.connectable.connected = False
+        device.connectable.startConnected = False
+
+        change = vim.vm.device.VirtualDeviceSpec()
+        change.operation = vim.vm.device.VirtualDeviceSpec.Operation.edit
+        change.device = device
+        device_changes.append(change)
+        disconnected.append(device.deviceInfo.label)
+
+    if device_changes:
+        spec = vim.vm.ConfigSpec()
+        spec.deviceChange = device_changes
+        wait_for_task(vm.ReconfigVM_Task(spec))
+
+    return disconnected
 
 
 def probe_console(host: str, port: int) -> dict[str, Any]:
@@ -507,6 +564,20 @@ def run_job(job_id: str, request: DeployRequest, client_ip: str) -> None:
             update_job(job_id, phase="Configuring ESXi", progress=75 + int((index - 1) * 10 / total), event=f"Configuring serial ports for {vm['name']}")
             ensure_serial_ports(vm["name"], int(vm["serial1"]), int(vm["serial2"]), env)
 
+            if version_cfg.get("disconnect_network_adapters", True):
+                update_job(
+                    job_id,
+                    phase="Configuring ESXi",
+                    progress=80 + int((index - 1) * 5 / total),
+                    event=f"Disconnecting network adapters for {vm['name']}",
+                )
+                disconnected = disconnect_network_adapters(si, vm["name"])
+                vm["network_adapters_disconnected"] = len(disconnected)
+                vm["network_adapter_names"] = disconnected
+            else:
+                vm["network_adapters_disconnected"] = 0
+                vm["network_adapter_names"] = []
+
             update_job(job_id, phase="Powering on VMs", progress=85 + int((index - 1) * 5 / total), event=f"Powering on {vm['name']}")
             run_govc(["vm.power", "-on", vm["name"]], env, timeout=180)
             deployed.append(vm)
@@ -525,6 +596,7 @@ def run_job(job_id: str, request: DeployRequest, client_ip: str) -> None:
             "requested_vm_count": request.vm_count,
             "planned_vm_count": len(planned_vms),
             "created_vm_count": len(verified),
+            "network_adapters_disconnected": sum(int(vm.get("network_adapters_disconnected") or 0) for vm in verified),
             "vm_names": [vm["name"] for vm in verified],
             "duration_seconds": round(time.monotonic() - started, 1),
         })

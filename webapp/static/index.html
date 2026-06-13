@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cat9kV ESXi Deployment Tool</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=20260613-mcp-compact">
   </head>
   <body>
     <main class="shell">
@@ -15,37 +15,25 @@
             <h1>Welcome to the Cat9kV ESXi Deployment Tool</h1>
           </div>
           <div class="masthead-actions">
-            <div class="mcp-menu" id="mcpMenu">
-              <button type="button" class="mcp-trigger" id="mcpToggle" aria-expanded="false">
-                MCP setup
+            <div class="mcp-widget" id="mcpWidget">
+              <button type="button" class="mcp-copy-button" id="mcpCopy" aria-label="Copy MCP setup command">
+                <span>MCP</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                  <path d="M5 15V7a2 2 0 0 1 2-2h8"></path>
+                </svg>
               </button>
-              <div class="mcp-popover" id="mcpPanel" role="dialog" aria-label="Cat9kV MCP setup">
-                <div class="mcp-popover-header">
-                  <div>
-                    <p class="eyebrow">Automation</p>
-                    <h2>Cat9kV MCP</h2>
-                  </div>
-                  <span class="mcp-status">Available</span>
-                </div>
-                <div class="mcp-copy-row">
-                  <span>Codex command</span>
-                  <code id="mcpCommand">codex mcp add cat9kv --url http://10.76.90.60/mcp</code>
-                  <button type="button" class="copy-inline" data-copy-target="mcpCommand">Copy</button>
-                </div>
-                <div class="mcp-copy-row">
-                  <span>MCP URL</span>
+              <div class="mcp-tooltip" id="mcpPanel" role="tooltip">
+                <div class="mcp-tooltip-title">MCP server</div>
+                <div class="mcp-tooltip-row">
+                  <span>URL</span>
                   <code id="mcpUrl">http://10.76.90.60/mcp</code>
-                  <button type="button" class="copy-inline" data-copy-target="mcpUrl">Copy</button>
                 </div>
-                <details class="mcp-config-detail">
-                  <summary>Config snippet</summary>
-                  <div class="mcp-copy-row config-row">
-                    <pre id="mcpConfig">[mcp_servers.cat9kv]
-url = "http://10.76.90.60/mcp"</pre>
-                    <button type="button" class="copy-inline" data-copy-target="mcpConfig">Copy</button>
-                  </div>
-                </details>
-                <p class="mcp-note">Codex cannot auto-register from this page. Run the command, then open a new Codex session.</p>
+                <div class="mcp-tooltip-row">
+                  <span>Codex</span>
+                  <code id="mcpCommand">codex mcp add cat9kv --url http://10.76.90.60/mcp</code>
+                </div>
+                <p>Click the copy icon to copy the Codex command.</p>
               </div>
             </div>
             <div class="status-pill" id="serviceStatus">Ready</div>
@@ -129,6 +117,6 @@ url = "http://10.76.90.60/mcp"</pre>
       </section>
     </main>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=20260613-mcp-compact"></script>
   </body>
 </html>

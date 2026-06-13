@@ -53,142 +53,115 @@ body {
 .masthead-actions {
   display: flex;
   gap: 10px;
-  align-items: flex-start;
+  align-items: center;
 }
 
-.mcp-menu {
+.mcp-widget {
   position: relative;
+  display: inline-flex;
 }
 
-.mcp-menu .mcp-trigger {
+.mcp-copy-button {
   height: 34px;
-  padding: 0 10px;
+  padding: 0 9px 0 12px;
   border: 1px solid #b8c8d8;
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--blue);
   background: #fff;
   font-size: 13px;
   font-weight: 800;
   white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(29, 39, 48, 0.08);
 }
 
-.mcp-menu .mcp-trigger:hover,
-.mcp-menu.open .mcp-trigger {
+.mcp-copy-button:hover,
+.mcp-copy-button:focus {
   border-color: var(--blue);
   background: #edf7ff;
 }
 
-.mcp-popover {
+.mcp-copy-button.copied {
+  border-color: #8ac9b6;
+  color: var(--green);
+  background: #effaf5;
+}
+
+.mcp-copy-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.mcp-tooltip {
   display: none;
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 20;
-  width: min(520px, calc(100vw - 48px));
-  padding: 16px;
+  width: min(360px, calc(100vw - 48px));
+  padding: 12px;
   border: 1px solid #b8c8d8;
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 20px 45px rgba(29, 39, 48, 0.18);
+  box-shadow: 0 14px 30px rgba(29, 39, 48, 0.16);
 }
 
-.mcp-menu:hover .mcp-popover,
-.mcp-menu.open .mcp-popover,
-.mcp-menu:focus-within .mcp-popover {
+.mcp-tooltip::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 28px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid #b8c8d8;
+  border-left: 1px solid #b8c8d8;
+  background: #fff;
+  transform: rotate(45deg);
+}
+
+.mcp-widget:hover .mcp-tooltip,
+.mcp-widget:focus-within .mcp-tooltip {
   display: block;
 }
 
-.mcp-popover-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.mcp-popover h2 {
-  font-size: 18px;
-}
-
-.mcp-status {
-  padding: 5px 8px;
-  border: 1px solid #bfe2d5;
-  border-radius: 999px;
-  color: var(--green);
-  background: #effaf5;
-  font-size: 12px;
+.mcp-tooltip-title {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 13px;
   font-weight: 800;
 }
 
-.mcp-copy-row {
+.mcp-tooltip-row {
   display: grid;
-  grid-template-columns: 105px minmax(0, 1fr) 58px;
-  gap: 10px;
-  align-items: center;
-  padding: 9px 0;
-  border-top: 1px solid var(--line);
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 6px 0;
+  border-top: 1px solid #edf2f6;
 }
 
-.mcp-copy-row span {
+.mcp-tooltip-row span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
 }
 
-.mcp-copy-row code,
-.mcp-copy-row pre {
+.mcp-tooltip-row code {
   min-width: 0;
   margin: 0;
-  padding: 8px 9px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
   color: #15384d;
-  background: #f7fbfd;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
-.mcp-config-detail {
-  border-top: 1px solid var(--line);
-  padding-top: 9px;
-}
-
-.mcp-config-detail summary {
-  color: var(--blue);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.config-row {
-  grid-template-columns: minmax(0, 1fr) 58px;
-  border-top: 0;
-  padding-bottom: 0;
-}
-
-.copy-inline.copy-inline {
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid #b8c8d8;
-  border-radius: 6px;
-  color: var(--blue);
-  background: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.copy-inline.copy-inline:hover {
-  border-color: var(--blue);
-  background: #edf7ff;
-}
-
-.mcp-note {
-  margin: 12px 0 0;
+.mcp-tooltip p {
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -522,20 +495,10 @@ pre {
     width: 100%;
   }
 
-  .mcp-menu,
-  .mcp-menu .mcp-trigger {
-    width: 100%;
-  }
-
-  .mcp-popover {
-    position: static;
-    width: 100%;
-    margin-top: 8px;
-  }
-
-  .mcp-copy-row,
-  .config-row {
-    grid-template-columns: 1fr;
+  .mcp-tooltip {
+    left: 0;
+    right: auto;
+    width: min(320px, calc(100vw - 64px));
   }
 
   .event-list li {

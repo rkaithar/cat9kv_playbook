@@ -13,12 +13,9 @@ const summaryBlock = document.querySelector("#summaryBlock");
 const consoleLinks = document.querySelector("#consoleLinks");
 const errorPanel = document.querySelector("#errorPanel");
 const errorText = document.querySelector("#errorText");
-const mcpMenu = document.querySelector("#mcpMenu");
-const mcpToggle = document.querySelector("#mcpToggle");
-const mcpPanel = document.querySelector("#mcpPanel");
+const mcpCopy = document.querySelector("#mcpCopy");
 const mcpUrl = document.querySelector("#mcpUrl");
 const mcpCommand = document.querySelector("#mcpCommand");
-const mcpConfig = document.querySelector("#mcpConfig");
 
 let pollTimer = null;
 
@@ -165,62 +162,17 @@ async function copyCommand(command, button) {
   }
 }
 
-async function copyText(text, button) {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.setAttribute("readonly", "");
-      textArea.style.position = "fixed";
-      textArea.style.left = "-9999px";
-      document.body.append(textArea);
-      textArea.select();
-      document.execCommand("copy");
-      textArea.remove();
-    }
-    const previousText = button.textContent;
-    button.textContent = "Copied";
-    setTimeout(() => {
-      button.textContent = previousText;
-    }, 1200);
-  } catch {
-    button.textContent = "Copy failed";
-  }
-}
-
 function setupMcpDetails() {
   const origin = window.location.origin || "http://10.76.90.60";
   const url = `${origin}/mcp`;
   mcpUrl.textContent = url;
   mcpCommand.textContent = `codex mcp add cat9kv --url ${url}`;
-  mcpConfig.textContent = `[mcp_servers.cat9kv]\nurl = "${url}"`;
+  mcpCopy.title = "Copy MCP setup command";
 
-  mcpToggle.addEventListener("click", (event) => {
+  mcpCopy.addEventListener("click", (event) => {
     event.stopPropagation();
-    const isOpen = mcpMenu.classList.toggle("open");
-    mcpToggle.setAttribute("aria-expanded", String(isOpen));
+    copyCommand(mcpCommand.textContent, mcpCopy);
   });
-  document.addEventListener("click", (event) => {
-    if (!mcpMenu.contains(event.target)) {
-      mcpMenu.classList.remove("open");
-      mcpToggle.setAttribute("aria-expanded", "false");
-    }
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      mcpMenu.classList.remove("open");
-      mcpToggle.setAttribute("aria-expanded", "false");
-    }
-  });
-  for (const button of document.querySelectorAll(".copy-inline")) {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const target = document.querySelector(`#${button.dataset.copyTarget}`);
-      copyText(target.textContent, button);
-    });
-  }
 }
 
 async function loadVersions() {

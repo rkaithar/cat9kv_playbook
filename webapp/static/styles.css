@@ -56,69 +56,90 @@ body {
   align-items: flex-start;
 }
 
-.mcp-button {
-  height: 36px;
-  padding: 0 12px;
+.mcp-menu {
+  position: relative;
+}
+
+.mcp-menu .mcp-trigger {
+  height: 34px;
+  padding: 0 10px;
   border: 1px solid #b8c8d8;
   border-radius: 6px;
   color: var(--blue);
   background: #fff;
   font-size: 13px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
-.mcp-panel {
+.mcp-menu .mcp-trigger:hover,
+.mcp-menu.open .mcp-trigger {
+  border-color: var(--blue);
+  background: #edf7ff;
+}
+
+.mcp-popover {
+  display: none;
   position: absolute;
-  top: 76px;
-  right: 24px;
+  top: calc(100% + 10px);
+  right: 0;
   z-index: 20;
-  width: min(560px, calc(100% - 48px));
-  padding: 18px;
+  width: min(520px, calc(100vw - 48px));
+  padding: 16px;
   border: 1px solid #b8c8d8;
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 20px 45px rgba(29, 39, 48, 0.18);
 }
 
-.mcp-panel-header {
+.mcp-menu:hover .mcp-popover,
+.mcp-menu.open .mcp-popover,
+.mcp-menu:focus-within .mcp-popover {
+  display: block;
+}
+
+.mcp-popover-header {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
 }
 
-.mcp-close {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid #b8c8d8;
-  border-radius: 6px;
-  color: var(--muted);
-  background: #fff;
-  font-size: 22px;
-  line-height: 1;
+.mcp-popover h2 {
+  font-size: 18px;
 }
 
-.mcp-detail {
-  display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 68px;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-}
-
-.mcp-detail span {
-  color: var(--muted);
-  font-size: 13px;
+.mcp-status {
+  padding: 5px 8px;
+  border: 1px solid #bfe2d5;
+  border-radius: 999px;
+  color: var(--green);
+  background: #effaf5;
+  font-size: 12px;
   font-weight: 800;
 }
 
-.mcp-detail code,
-.mcp-detail pre {
+.mcp-copy-row {
+  display: grid;
+  grid-template-columns: 105px minmax(0, 1fr) 58px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+
+.mcp-copy-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mcp-copy-row code,
+.mcp-copy-row pre {
   min-width: 0;
   margin: 0;
-  padding: 9px 10px;
+  padding: 8px 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
   color: #15384d;
@@ -129,11 +150,25 @@ body {
   overflow-wrap: anywhere;
 }
 
-.config-detail {
-  align-items: start;
+.mcp-config-detail {
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
 }
 
-.copy-inline {
+.mcp-config-detail summary {
+  color: var(--blue);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.config-row {
+  grid-template-columns: minmax(0, 1fr) 58px;
+  border-top: 0;
+  padding-bottom: 0;
+}
+
+.copy-inline.copy-inline {
   height: 34px;
   padding: 0 10px;
   border: 1px solid #b8c8d8;
@@ -142,6 +177,12 @@ body {
   background: #fff;
   font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
+}
+
+.copy-inline.copy-inline:hover {
+  border-color: var(--blue);
+  background: #edf7ff;
 }
 
 .mcp-note {
@@ -481,13 +522,19 @@ pre {
     width: 100%;
   }
 
-  .mcp-panel {
-    position: static;
+  .mcp-menu,
+  .mcp-menu .mcp-trigger {
     width: 100%;
-    margin-bottom: 18px;
   }
 
-  .mcp-detail {
+  .mcp-popover {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .mcp-copy-row,
+  .config-row {
     grid-template-columns: 1fr;
   }
 

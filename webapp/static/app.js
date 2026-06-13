@@ -13,8 +13,8 @@ const summaryBlock = document.querySelector("#summaryBlock");
 const consoleLinks = document.querySelector("#consoleLinks");
 const errorPanel = document.querySelector("#errorPanel");
 const errorText = document.querySelector("#errorText");
+const mcpMenu = document.querySelector("#mcpMenu");
 const mcpToggle = document.querySelector("#mcpToggle");
-const mcpClose = document.querySelector("#mcpClose");
 const mcpPanel = document.querySelector("#mcpPanel");
 const mcpUrl = document.querySelector("#mcpUrl");
 const mcpCommand = document.querySelector("#mcpCommand");
@@ -197,14 +197,26 @@ function setupMcpDetails() {
   mcpCommand.textContent = `codex mcp add cat9kv --url ${url}`;
   mcpConfig.textContent = `[mcp_servers.cat9kv]\nurl = "${url}"`;
 
-  mcpToggle.addEventListener("click", () => {
-    mcpPanel.hidden = !mcpPanel.hidden;
+  mcpToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = mcpMenu.classList.toggle("open");
+    mcpToggle.setAttribute("aria-expanded", String(isOpen));
   });
-  mcpClose.addEventListener("click", () => {
-    mcpPanel.hidden = true;
+  document.addEventListener("click", (event) => {
+    if (!mcpMenu.contains(event.target)) {
+      mcpMenu.classList.remove("open");
+      mcpToggle.setAttribute("aria-expanded", "false");
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      mcpMenu.classList.remove("open");
+      mcpToggle.setAttribute("aria-expanded", "false");
+    }
   });
   for (const button of document.querySelectorAll(".copy-inline")) {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
       const target = document.querySelector(`#${button.dataset.copyTarget}`);
       copyText(target.textContent, button);
     });

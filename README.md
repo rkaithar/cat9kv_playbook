@@ -36,6 +36,29 @@ The deployed lab service is exposed through nginx at `http://10.76.90.60/`. The 
 
 The UI supports dry-run planning and deployment progress. Dry runs show a plain summary only. Completed deployments show clickable `telnet://` links, copy buttons for the telnet commands, the count of disconnected network adapters, and a link to the target ESXi UI for port-group changes.
 
+## MCP Server
+
+The Ubuntu host also exposes a thin MCP wrapper for Codex/GPT automation:
+
+```text
+http://10.76.90.60/mcp
+```
+
+Add it to Codex with:
+
+```sh
+codex mcp add cat9kv --url http://10.76.90.60/mcp
+```
+
+or add this to Codex config:
+
+```toml
+[mcp_servers.cat9kv]
+url = "http://10.76.90.60/mcp"
+```
+
+The MCP server is a structured wrapper over the existing REST API. It does not duplicate ESXi deployment logic. A web page cannot silently register an MCP server into a user's Codex config, so the web UI shows copyable MCP setup details in the top-right panel.
+
 ## Audit Log
 
 The web service writes deployment audit records to `/opt/cat9kv-playbook/logs/audit.jsonl` on the Ubuntu host. Records exclude passwords and include request source details, client IP, client type, ESXi host/version/build, selected datastore, Cat9kV image metadata, planned VM/serial-port details, status, VM names, created VM count, console probe results, disconnected adapter count, errors, and duration.

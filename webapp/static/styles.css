@@ -31,6 +31,7 @@ body {
 }
 
 .panel {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -47,6 +48,107 @@ body {
   gap: 18px;
   align-items: flex-start;
   margin-bottom: 22px;
+}
+
+.masthead-actions {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.mcp-button {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #b8c8d8;
+  border-radius: 6px;
+  color: var(--blue);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mcp-panel {
+  position: absolute;
+  top: 76px;
+  right: 24px;
+  z-index: 20;
+  width: min(560px, calc(100% - 48px));
+  padding: 18px;
+  border: 1px solid #b8c8d8;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 20px 45px rgba(29, 39, 48, 0.18);
+}
+
+.mcp-panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mcp-close {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #b8c8d8;
+  border-radius: 6px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.mcp-detail {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 68px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.mcp-detail span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mcp-detail code,
+.mcp-detail pre {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: #15384d;
+  background: #f7fbfd;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.config-detail {
+  align-items: start;
+}
+
+.copy-inline {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #b8c8d8;
+  border-radius: 6px;
+  color: var(--blue);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mcp-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .eyebrow {
@@ -373,6 +475,20 @@ pre {
   .progress-header,
   .result-header {
     flex-direction: column;
+  }
+
+  .masthead-actions {
+    width: 100%;
+  }
+
+  .mcp-panel {
+    position: static;
+    width: 100%;
+    margin-bottom: 18px;
+  }
+
+  .mcp-detail {
+    grid-template-columns: 1fr;
   }
 
   .event-list li {

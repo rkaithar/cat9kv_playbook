@@ -498,6 +498,42 @@ For dry runs, use the same block but mark each VM as `planned` instead of `power
 
 Do not embed an interactive serial console in the v1 web app. An in-browser console requires a server-side telnet proxy, WebSocket terminal, session cleanup, and additional authentication/error handling. Keep v1 reliable by showing validated telnet access details and leaving terminal handling to the user's local telnet client.
 
+### MCP Automation Interface
+
+The MCP server is hosted on the Ubuntu server as a separate service and exposed through nginx:
+
+```text
+http://10.76.90.60/mcp
+```
+
+Codex setup:
+
+```sh
+codex mcp add cat9kv --url http://10.76.90.60/mcp
+```
+
+Equivalent config:
+
+```toml
+[mcp_servers.cat9kv]
+url = "http://10.76.90.60/mcp"
+```
+
+The MCP server must remain a thin wrapper over the web app REST API. It should not contain ESXi, govc, pyVmomi, OVA import, or datastore-selection logic. The REST API remains the system of record.
+
+Initial MCP tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `cat9kv_list_versions` | Return versions available on the Ubuntu image server |
+| `cat9kv_dry_run` | Run planning only and wait for the dry-run result |
+| `cat9kv_start_deploy` | Start a deploy job and return the `job_id` |
+| `cat9kv_get_job` | Return current job status, events, result, or error |
+| `cat9kv_wait_for_job` | Poll a job until it completes, fails, or times out |
+| `cat9kv_audit_summary` | Return the current audit summary |
+
+A web page cannot silently modify a user's Codex MCP configuration. The `.60` UI should show copyable setup details, but the user must run the setup command or add the config and start a new Codex session.
+
 ### Audit and Usage Tracking
 
 The web app must write an append-only JSONL audit log on the Ubuntu host. The default path is:

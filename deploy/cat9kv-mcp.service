@@ -1,0 +1,19 @@
+[Unit]
+Description=Cat9kV MCP Server
+After=network-online.target cat9kv-web.service
+Wants=network-online.target
+Requires=cat9kv-web.service
+
+[Service]
+Type=simple
+User=user
+WorkingDirectory=/opt/cat9kv-playbook
+Environment=CAT9KV_API_BASE=http://127.0.0.1:8080
+Environment=CAT9KV_AUDIT_LOG=/opt/cat9kv-playbook/logs/audit.jsonl
+Environment=CAT9KV_MCP_ALLOWED_ORIGINS=http://10.76.90.60,http://127.0.0.1,http://localhost
+ExecStart=/usr/bin/python3 /opt/cat9kv-playbook/mcp_server/cat9kv_mcp.py --host 127.0.0.1 --port 8090
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -34,6 +34,7 @@ GOVC_BIN = os.environ.get("GOVC_BIN", "govc")
 AUDIT_LOG = Path(os.environ.get("CAT9KV_AUDIT_LOG", REPO_DIR / "logs/audit.jsonl"))
 SUPPORT_EMAIL = "rkaithar@cisco.com"
 DEFAULT_RESOURCE_POOL = "/ha-datacenter/host/localhost./Resources"
+AUDIT_SCHEMA_VERSION = 2
 
 
 app = FastAPI(title="Cat9kV ESXi Deployment Tool")
@@ -109,6 +110,134 @@ def client_ip_from_request(request: Request) -> str:
     if request.client and request.client.host:
         return request.client.host
     return "unknown"
+
+
+def trim_header(value: str | None, limit: int = 240) -> str:
+    if not value:
+        return ""
+    return " ".join(value.split())[:limit]
+
+
+def classify_client(user_agent: str) -> str:
+    lower = user_agent.lower()
+    if "curl/" in lower:
+        return "curl"
+    if "python" in lower or "httpx" in lower or "requests" in lower:
+        return "python"
+    if "mozilla/" in lower or "chrome/" in lower or "safari/" in lower or "firefox/" in lower:
+        return "web_browser"
+    if lower:
+        return "automation"
+    return "unknown"
+
+
+def request_context_from_request(request: Request) -> dict[str, str]:
+    user_agent = trim_header(request.headers.get("user-agent"))
+    return {
+        "client_ip": client_ip_from_request(request),
+        "direct_client_ip": request.client.host if request.client and request.client.host else "unknown",
+        "x_forwarded_for": trim_header(request.headers.get("x-forwarded-for")),
+        "client_kind": classify_client(user_agent),
+        "user_agent": user_agent,
+        "origin": trim_header(request.headers.get("origin")),
+        "referer": trim_header(request.headers.get("referer")),
+    }
+
+
+def audit_base(job_id: str, request: DeployRequest, request_context: dict[str, str]) -> dict[str, Any]:
+    return {
+        "audit_schema_version": AUDIT_SCHEMA_VERSION,
+        "job_id": job_id,
+        **request_context,
+        "esxi_host": request.esxi_host,
+        "mode": request.mode,
+        "version": request.version,
+        "requested_vm_count": request.vm_count,
+    }
+
+
+def version_audit_details(version_cfg: dict[str, Any], local_ova: Path | None = None) -> dict[str, Any]:
+    ova_name = Path(urlparse(str(version_cfg.get("ova_url", ""))).path).name
+    iso_name = Path(urlparse(str(version_cfg.get("iso_url", ""))).path).name
+    return {
+        "version_token": version_cfg.get("token"),
+        "deployment_method": version_cfg.get("deployment_method", "ova"),
+        "ova_filename": ova_name,
+        "iso_filename": iso_name,
+        "local_ova": local_ova.name if local_ova else "",
+        "disconnect_network_adapters": bool(version_cfg.get("disconnect_network_adapters", True)),
+        "ensure_serial_ports": bool(version_cfg.get("ensure_serial_ports", True)),
+    }
+
+
+def inventory_audit_details(inventory: dict[str, Any]) -> dict[str, Any]:
+    datastores = inventory.get("datastores", [])
+    about = inventory.get("about", {})
+    return {
+        "esxi_product": about.get("full_name", ""),
+        "esxi_version": about.get("version", ""),
+        "esxi_build": about.get("build", ""),
+        "datastore_count": len(datastores),
+        "accessible_datastore_count": sum(1 for datastore in datastores if datastore.get("accessible")),
+        "preexisting_vm_count": len(inventory.get("vm_names", [])),
+        "used_serial_port_count": len(inventory.get("used_ports", [])),
+    }
+
+
+def datastore_audit_details(datastore: dict[str, Any] | None) -> dict[str, Any]:
+    if not datastore:
+        return {}
+    return {
+        "selected_datastore": datastore.get("name"),
+        "selected_datastore_type": datastore.get("type"),
+        "selected_datastore_capacity_gb": datastore.get("capacity_gb"),
+        "selected_datastore_free_gb": datastore.get("free_gb"),
+    }
+
+
+def planned_vms_audit(vms: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": vm.get("name"),
+            "serial1": vm.get("serial1"),
+            "serial2": vm.get("serial2"),
+        }
+        for vm in vms
+    ]
+
+
+def deployed_vms_audit(vms: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    details = []
+    for vm in vms:
+        serial1_probe = vm.get("serial1_probe") or {}
+        serial2_probe = vm.get("serial2_probe") or {}
+        details.append({
+            "name": vm.get("name"),
+            "state": vm.get("state"),
+            "serial1": vm.get("serial1"),
+            "serial1_tcp_open": bool(serial1_probe.get("tcp_open")),
+            "serial2": vm.get("serial2"),
+            "serial2_tcp_open": bool(serial2_probe.get("tcp_open")),
+            "network_adapters_disconnected": int(vm.get("network_adapters_disconnected") or 0),
+        })
+    return details
+
+
+def console_probe_totals(vms: list[dict[str, Any]]) -> dict[str, int]:
+    total = 0
+    open_count = 0
+    for vm in vms:
+        for key in ("serial1_probe", "serial2_probe"):
+            probe = vm.get(key)
+            if not isinstance(probe, dict):
+                continue
+            total += 1
+            if probe.get("tcp_open"):
+                open_count += 1
+    return {
+        "console_ports_checked": total,
+        "console_ports_open": open_count,
+    }
 
 
 def update_job(job_id: str, *, status: str | None = None, phase: str | None = None,
@@ -467,17 +596,21 @@ def friendly_error(exc: Exception) -> str:
     return text
 
 
-def run_job(job_id: str, request: DeployRequest, client_ip: str) -> None:
+def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]) -> None:
     si = None
     started = time.monotonic()
+    base_audit = audit_base(job_id, request, request_context)
+    version_cfg: dict[str, Any] = {}
+    local_ova: Path | None = None
+    inventory: dict[str, Any] | None = None
+    datastore: dict[str, Any] | None = None
+    planned_vms: list[dict[str, Any]] = []
+    deployed: list[dict[str, Any]] = []
+    verified: list[dict[str, Any]] = []
     append_audit({
+        **base_audit,
         "action": "job_started",
-        "job_id": job_id,
-        "client_ip": client_ip,
-        "esxi_host": request.esxi_host,
-        "mode": request.mode,
-        "version": request.version,
-        "requested_vm_count": request.vm_count,
+        "status": "started",
     })
     try:
         update_job(job_id, status="running", phase="Validating input", progress=5, event="Starting Cat9kV ESXi workflow")
@@ -510,20 +643,31 @@ def run_job(job_id: str, request: DeployRequest, client_ip: str) -> None:
             inventory["used_ports"],
         )
         update_job(job_id, event=f"Selected datastore {datastore['name']} with {datastore['free_gb']} GB free")
+        append_audit({
+            **base_audit,
+            **version_audit_details(version_cfg, local_ova),
+            **inventory_audit_details(inventory),
+            **datastore_audit_details(datastore),
+            "action": "job_planned",
+            "status": "success",
+            "planned_vm_count": len(planned_vms),
+            "planned_vms": planned_vms_audit(planned_vms),
+            "vm_names": [vm["name"] for vm in planned_vms],
+        })
 
         if request.mode == "dry_run":
             summary = console_summary(request.esxi_host, request.version, datastore["name"], planned_vms)
             append_audit({
+                **base_audit,
+                **version_audit_details(version_cfg, local_ova),
+                **inventory_audit_details(inventory),
+                **datastore_audit_details(datastore),
                 "action": "job_completed",
-                "job_id": job_id,
-                "client_ip": client_ip,
-                "esxi_host": request.esxi_host,
-                "mode": request.mode,
-                "version": request.version,
                 "status": "success",
-                "requested_vm_count": request.vm_count,
                 "planned_vm_count": len(planned_vms),
                 "created_vm_count": 0,
+                "network_adapters_disconnected": 0,
+                "planned_vms": planned_vms_audit(planned_vms),
                 "vm_names": [vm["name"] for vm in planned_vms],
                 "duration_seconds": round(time.monotonic() - started, 1),
             })
@@ -540,7 +684,6 @@ def run_job(job_id: str, request: DeployRequest, client_ip: str) -> None:
         update_job(job_id, phase="Configuring ESXi", progress=38, event="Enabling remote serial port firewall rule")
         run_govc(["host.esxcli", "network", "firewall", "ruleset", "set", "-e", "true", "-r", "remoteSerialPort"], env, timeout=120)
 
-        deployed: list[dict[str, Any]] = []
         total = len(planned_vms)
         for index, vm in enumerate(planned_vms, start=1):
             update_job(job_id, phase="Copying OVA to ESXi", progress=40 + int((index - 1) * 35 / total), event=f"Importing {vm['name']}")
@@ -586,17 +729,18 @@ def run_job(job_id: str, request: DeployRequest, client_ip: str) -> None:
         verified = [verify_vm(vm, request.esxi_host, env) for vm in deployed]
         summary = console_summary(request.esxi_host, request.version, datastore["name"], verified)
         append_audit({
+            **base_audit,
+            **version_audit_details(version_cfg, local_ova),
+            **inventory_audit_details(inventory),
+            **datastore_audit_details(datastore),
+            **console_probe_totals(verified),
             "action": "job_completed",
-            "job_id": job_id,
-            "client_ip": client_ip,
-            "esxi_host": request.esxi_host,
-            "mode": request.mode,
-            "version": request.version,
             "status": "success",
-            "requested_vm_count": request.vm_count,
             "planned_vm_count": len(planned_vms),
             "created_vm_count": len(verified),
             "network_adapters_disconnected": sum(int(vm.get("network_adapters_disconnected") or 0) for vm in verified),
+            "planned_vms": planned_vms_audit(planned_vms),
+            "vm_details": deployed_vms_audit(verified),
             "vm_names": [vm["name"] for vm in verified],
             "duration_seconds": round(time.monotonic() - started, 1),
         })
@@ -610,20 +754,28 @@ def run_job(job_id: str, request: DeployRequest, client_ip: str) -> None:
         })
     except Exception as exc:
         message = friendly_error(exc)
-        append_audit({
+        error_record = {
+            **base_audit,
             "action": "job_completed",
-            "job_id": job_id,
-            "client_ip": client_ip,
-            "esxi_host": request.esxi_host,
-            "mode": request.mode,
-            "version": request.version,
             "status": "error",
-            "requested_vm_count": request.vm_count,
-            "planned_vm_count": 0,
-            "created_vm_count": 0,
+            "planned_vm_count": len(planned_vms),
+            "created_vm_count": len(deployed),
+            "network_adapters_disconnected": sum(int(vm.get("network_adapters_disconnected") or 0) for vm in deployed),
+            "planned_vms": planned_vms_audit(planned_vms),
+            "vm_details": deployed_vms_audit(verified or deployed),
+            "vm_names": [vm["name"] for vm in (verified or deployed or planned_vms)],
             "error": message,
             "duration_seconds": round(time.monotonic() - started, 1),
-        })
+        }
+        if version_cfg:
+            error_record.update(version_audit_details(version_cfg, local_ova))
+        if inventory:
+            error_record.update(inventory_audit_details(inventory))
+        if datastore:
+            error_record.update(datastore_audit_details(datastore))
+        if verified:
+            error_record.update(console_probe_totals(verified))
+        append_audit(error_record)
         update_job(
             job_id,
             status="error",
@@ -667,9 +819,9 @@ def versions() -> dict[str, Any]:
 
 @app.post("/api/deploy")
 def deploy(request_payload: DeployRequest, request: Request) -> dict[str, str]:
-    client_ip = client_ip_from_request(request)
-    job_id = make_job(client_ip)
-    thread = threading.Thread(target=run_job, args=(job_id, request_payload, client_ip), daemon=True)
+    request_context = request_context_from_request(request)
+    job_id = make_job(request_context["client_ip"])
+    thread = threading.Thread(target=run_job, args=(job_id, request_payload, request_context), daemon=True)
     thread.start()
     return {"job_id": job_id}
 

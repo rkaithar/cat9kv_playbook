@@ -506,23 +506,34 @@ The web app must write an append-only JSONL audit log on the Ubuntu host. The de
 /opt/cat9kv-playbook/logs/audit.jsonl
 ```
 
-Each workflow should write a `job_started` record and a final `job_completed` record. Do not write ESXi passwords or imported OVA spec files to the audit log.
+Each workflow should write a `job_started` record, a `job_planned` record after ESXi discovery and placement selection, and a final `job_completed` record. Do not write ESXi passwords, ESXi usernames, or imported OVA spec files to the audit log.
 
 Required audit fields:
 
 | Field | Purpose |
 | --- | --- |
+| `audit_schema_version` | Allows audit parsing to evolve without breaking older records |
 | `time` | UTC timestamp |
 | `job_id` | Correlates start and completion |
 | `client_ip` | Incoming web client IP |
+| `direct_client_ip` | Direct peer IP seen by the app, useful when nginx forwards requests |
+| `x_forwarded_for` | Forwarded client chain from nginx, if present |
+| `client_kind` | Best-effort caller classification such as `web_browser`, `curl`, `python`, or `automation` |
+| `user_agent` | Request user-agent string, truncated for readability |
 | `esxi_host` | Target ESXi IP/FQDN |
+| `esxi_product`, `esxi_version`, `esxi_build` | Target ESXi details discovered during planning |
 | `mode` | `dry_run` or `deploy` |
 | `version` | Selected Cat9kV version |
+| `version_token`, `deployment_method`, `ova_filename`, `iso_filename` | Catalog and image metadata |
 | `requested_vm_count` | User-requested VM count |
+| `selected_datastore`, `selected_datastore_free_gb` | Datastore selected by the engine |
 | `status` | `success` or `error` on completion |
 | `planned_vm_count` | Number of planned VMs |
+| `planned_vms` | Planned VM names and serial-port pairs |
 | `created_vm_count` | Number of VMs actually created |
 | `network_adapters_disconnected` | Total Ethernet adapters disconnected before first boot |
+| `console_ports_checked`, `console_ports_open` | Serial console verification result on deploy completion |
+| `vm_details` | Per-VM state, serial-port probe, and disconnected-adapter result |
 | `vm_names` | Planned or created VM names |
 | `duration_seconds` | Workflow duration |
 | `error` | Friendly error message when failed |

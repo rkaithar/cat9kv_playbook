@@ -38,7 +38,7 @@ The UI supports dry-run planning and deployment progress. Dry runs show a plain 
 
 ## Audit Log
 
-The web service writes deployment audit records to `/opt/cat9kv-playbook/logs/audit.jsonl` on the Ubuntu host. Each record excludes passwords and includes the client IP, ESXi host, mode, version, requested VM count, status, VM names, created VM count, disconnected adapter count, and duration.
+The web service writes deployment audit records to `/opt/cat9kv-playbook/logs/audit.jsonl` on the Ubuntu host. Records exclude passwords and include request source details, client IP, client type, ESXi host/version/build, selected datastore, Cat9kV image metadata, planned VM/serial-port details, status, VM names, created VM count, console probe results, disconnected adapter count, errors, and duration.
 
 Summarize usage with:
 

@@ -144,11 +144,13 @@ govc import.spec cat9kv-universalk9_serial.17.15.04.ova > import-spec.json
 
 ```sh
 SELECTED_DATASTORE="<selected-datastore>"
+SELECTED_RESOURCE_POOL="$(govc find / -type p | awk '/\\/Resources$/ { print; exit }')"
+: "${SELECTED_RESOURCE_POOL:=/ha-datacenter/host/localhost./Resources}"
 
 govc import.ova \
   -options=import-Cat9kv_171504_8021_8022.json \
   -ds="$SELECTED_DATASTORE" \
-  -pool='/ha-datacenter/host/localhost./Resources' \
+  -pool="$SELECTED_RESOURCE_POOL" \
   cat9kv-universalk9_serial.17.15.04.ova
 ```
 
@@ -563,6 +565,7 @@ Required audit fields:
 | `version_token`, `deployment_method`, `ova_filename`, `iso_filename` | Catalog and image metadata |
 | `requested_vm_count` | User-requested VM count |
 | `selected_datastore`, `selected_datastore_free_gb` | Datastore selected by the engine |
+| `selected_resource_pool` | Resource pool selected for `govc import.ova` |
 | `status` | `success` or `error` on completion |
 | `planned_vm_count` | Number of planned VMs |
 | `planned_vms` | Planned VM names and serial-port pairs |

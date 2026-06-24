@@ -61,7 +61,7 @@ The MCP server is a structured wrapper over the existing REST API. It does not d
 
 ## Audit Log
 
-The web service writes deployment audit records to `/opt/cat9kv-playbook/logs/audit.jsonl` on the Ubuntu host. Records exclude passwords and include request source details, client IP, client type, ESXi host/version/build, selected datastore, Cat9kV image metadata, planned VM/serial-port details, status, VM names, created VM count, console probe results, disconnected adapter count, errors, and duration.
+The web service writes deployment audit records to `/opt/cat9kv-playbook/logs/audit.jsonl` on the Ubuntu host. Records exclude passwords and include request source details, client IP, client type, ESXi host/version/build, selected datastore/resource pool, Cat9kV image metadata, planned VM/serial-port details, status, VM names, created VM count, console probe results, disconnected adapter count, errors, and duration.
 
 Summarize usage with:
 

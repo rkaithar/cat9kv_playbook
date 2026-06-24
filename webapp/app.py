@@ -34,6 +34,7 @@ GOVC_BIN = os.environ.get("GOVC_BIN", "govc")
 AUDIT_LOG = Path(os.environ.get("CAT9KV_AUDIT_LOG", REPO_DIR / "logs/audit.jsonl"))
 SUPPORT_EMAIL = "rkaithar@cisco.com"
 DEFAULT_RESOURCE_POOL = "/ha-datacenter/host/localhost./Resources"
+RESOURCE_POOL_OVERRIDE = os.environ.get("CAT9KV_RESOURCE_POOL", "").strip()
 AUDIT_SCHEMA_VERSION = 2
 
 
@@ -195,6 +196,12 @@ def datastore_audit_details(datastore: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def resource_pool_audit_details(resource_pool: str | None) -> dict[str, Any]:
+    if not resource_pool:
+        return {}
+    return {"selected_resource_pool": resource_pool}
+
+
 def planned_vms_audit(vms: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
@@ -285,6 +292,27 @@ def run_govc(args: list[str], env: dict[str, str], *, timeout: int = 300) -> str
     if completed.returncode != 0:
         raise RuntimeError(completed.stdout.strip() or f"govc {' '.join(args)} failed")
     return completed.stdout
+
+
+def discover_resource_pool(env: dict[str, str]) -> str:
+    if RESOURCE_POOL_OVERRIDE:
+        return RESOURCE_POOL_OVERRIDE
+
+    try:
+        output = run_govc(["find", "/", "-type", "p"], env, timeout=120)
+    except Exception:
+        return DEFAULT_RESOURCE_POOL
+
+    pools = [line.strip() for line in output.splitlines() if line.strip()]
+    if DEFAULT_RESOURCE_POOL in pools:
+        return DEFAULT_RESOURCE_POOL
+
+    default_named = [pool for pool in pools if pool.rstrip("/").endswith("/Resources")]
+    if default_named:
+        return sorted(default_named, key=lambda pool: (pool.count("/"), pool))[0]
+    if pools:
+        return sorted(pools, key=lambda pool: (pool.count("/"), pool))[0]
+    return DEFAULT_RESOURCE_POOL
 
 
 def stream_govc(args: list[str], env: dict[str, str], job_id: str, *, timeout: int = 1800) -> str:
@@ -604,6 +632,7 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
     local_ova: Path | None = None
     inventory: dict[str, Any] | None = None
     datastore: dict[str, Any] | None = None
+    selected_resource_pool = ""
     planned_vms: list[dict[str, Any]] = []
     deployed: list[dict[str, Any]] = []
     verified: list[dict[str, Any]] = []
@@ -632,6 +661,8 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
         http_head(version_cfg["ova_url"])
         http_head(version_cfg["iso_url"])
         run_govc(["import.spec", str(local_ova)], env, timeout=300)
+        selected_resource_pool = discover_resource_pool(env)
+        update_job(job_id, event=f"Selected resource pool {selected_resource_pool}")
 
         update_job(job_id, phase="Planning placement", progress=32, event="Selecting datastore and serial ports")
         datastore = select_datastore(inventory["datastores"], request.vm_count)
@@ -648,6 +679,7 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
             **version_audit_details(version_cfg, local_ova),
             **inventory_audit_details(inventory),
             **datastore_audit_details(datastore),
+            **resource_pool_audit_details(selected_resource_pool),
             "action": "job_planned",
             "status": "success",
             "planned_vm_count": len(planned_vms),
@@ -662,6 +694,7 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
                 **version_audit_details(version_cfg, local_ova),
                 **inventory_audit_details(inventory),
                 **datastore_audit_details(datastore),
+                **resource_pool_audit_details(selected_resource_pool),
                 "action": "job_completed",
                 "status": "success",
                 "planned_vm_count": len(planned_vms),
@@ -676,6 +709,7 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
                 "esxi_host": request.esxi_host,
                 "version": request.version,
                 "datastore": datastore,
+                "resource_pool": selected_resource_pool,
                 "vms": planned_vms,
                 "summary": summary,
             })
@@ -694,7 +728,7 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
                         "import.ova",
                         f"-options={spec_path}",
                         f"-ds={datastore['name']}",
-                        f"-pool={DEFAULT_RESOURCE_POOL}",
+                        f"-pool={selected_resource_pool}",
                         str(local_ova),
                     ],
                     env,
@@ -733,6 +767,7 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
             **version_audit_details(version_cfg, local_ova),
             **inventory_audit_details(inventory),
             **datastore_audit_details(datastore),
+            **resource_pool_audit_details(selected_resource_pool),
             **console_probe_totals(verified),
             "action": "job_completed",
             "status": "success",
@@ -749,6 +784,7 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
             "esxi_host": request.esxi_host,
             "version": request.version,
             "datastore": datastore,
+            "resource_pool": selected_resource_pool,
             "vms": verified,
             "summary": summary,
         })
@@ -773,6 +809,8 @@ def run_job(job_id: str, request: DeployRequest, request_context: dict[str, str]
             error_record.update(inventory_audit_details(inventory))
         if datastore:
             error_record.update(datastore_audit_details(datastore))
+        if selected_resource_pool:
+            error_record.update(resource_pool_audit_details(selected_resource_pool))
         if verified:
             error_record.update(console_probe_totals(verified))
         append_audit(error_record)

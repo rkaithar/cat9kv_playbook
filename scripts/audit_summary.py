@@ -125,6 +125,7 @@ def main() -> int:
     print_counter("By client kind", Counter(record.get("client_kind", "unknown") for record in completed))
     print_counter("By ESXi host", Counter(record.get("esxi_host", "unknown") for record in completed))
     print_counter("By selected datastore", Counter(record.get("selected_datastore", "unknown") for record in completed))
+    print_counter("By selected resource pool", Counter(record.get("selected_resource_pool", "unknown") for record in completed))
     print_counter("By mode", Counter(record.get("mode", "unknown") for record in completed))
     print_counter("By version", Counter(record.get("version", "unknown") for record in completed))
     print_counter("By status", Counter(record.get("status", "unknown") for record in completed))

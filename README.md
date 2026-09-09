@@ -59,6 +59,19 @@ url = "http://10.76.90.60/mcp"
 
 The MCP server is a structured wrapper over the existing REST API. It does not duplicate ESXi deployment logic. A web page cannot silently register an MCP server into a user's Codex config, so the web UI shows copyable MCP setup details in the top-right panel.
 
+## Codex Skill
+
+The reusable Codex skill is in [skills/cat9kv-esxi-deployer](skills/cat9kv-esxi-deployer). It teaches Codex to validate available versions, dry-run every deployment, preserve network-safety rules, monitor the deployment job, and report serial-console results through the MCP service.
+
+Install the skill from a repository checkout:
+
+```sh
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/cat9kv-esxi-deployer "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+Then add the MCP server using the command above and start a new Codex session. Invoke it explicitly with `$cat9kv-esxi-deployer`, or describe a Cat9kV ESXi planning or deployment task and allow Codex to select it automatically.
+
 ## Audit Log
 
 The web service writes deployment audit records to `/opt/cat9kv-playbook/logs/audit.jsonl` on the Ubuntu host. Records exclude passwords and include request source details, client IP, client type, ESXi host/version/build, selected datastore/resource pool, Cat9kV image metadata, planned VM/serial-port details, status, VM names, created VM count, console probe results, disconnected adapter count, errors, and duration.

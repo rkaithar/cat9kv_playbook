@@ -1,0 +1,12 @@
+interface:
+  display_name: "Cat9kV ESXi Deployer"
+  short_description: "Plan and deploy Cat9kV virtual switches on ESXi"
+  default_prompt: "Use $cat9kv-esxi-deployer to dry-run a Cat9kV deployment on my ESXi host."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "cat9kv"
+      description: "Cat9kV ESXi deployment and audit service"
+      transport: "streamable_http"
+      url: "http://10.76.90.60/mcp"
